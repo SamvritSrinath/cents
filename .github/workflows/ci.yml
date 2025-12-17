@@ -1,7 +1,5 @@
-/**
- * @fileoverview GitHub Actions CI workflow for Cents
- * Runs on all pushes and pull requests to verify code quality and build.
- */
+# GitHub Actions CI workflow for Cents
+# Runs on all pushes and pull requests to verify code quality and build.
 
 name: CI
 
