@@ -42,7 +42,7 @@ export default function SignupPage() {
 
     const supabase = createClient()
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -58,6 +58,18 @@ export default function SignupPage() {
       setIsLoading(false)
       return
     }
+
+    // Check for obfuscated/fake user response (email already registered)
+    // Supabase returns a user with empty identities array when email exists
+    // to prevent user enumeration attacks
+    if (data?.user?.identities?.length === 0) {
+      setError('An account with this email already exists. Please sign in instead.')
+      setIsLoading(false)
+      return
+    }
+
+    // Debug: log response to console
+    console.log('Signup response:', { user: data?.user, session: data?.session })
 
     setSuccess(true)
   }
