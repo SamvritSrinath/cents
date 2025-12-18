@@ -113,15 +113,14 @@ export function ProfileForm({ profile, email }: ProfileFormProps): React.ReactEl
       return
     }
 
-    // Perform upsert operation on the 'profiles' table.
-    // We use upsert to handle both creation and update logic.
+    // Update the profile in the 'profiles' table
     const { error } = await supabase
       .from('profiles')
-      .upsert({ 
-        id: user.id,
+      .update({ 
         display_name: data.display_name || null,
         updated_at: new Date().toISOString()
       })
+      .eq('id', user.id)
 
     if (!error) {
       setSuccess(true)

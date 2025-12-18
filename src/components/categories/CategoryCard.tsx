@@ -102,7 +102,7 @@ export function CategoryCard({ category }: CategoryCardProps): React.ReactElemen
         </div>
 
         {/* Action Buttons - revealed on hover */}
-        <div className="absolute right-10 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute right-2 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <CategoryFormDialog mode="edit" category={category}>
             <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit category">
               <Pencil className="h-3.5 w-3.5" />

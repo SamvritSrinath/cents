@@ -88,11 +88,11 @@ export function PreferencesForm({ defaultCurrency }: PreferencesFormProps): Reac
 
     const { error } = await supabase
       .from('profiles')
-      .upsert({ 
-        id: user.id,
+      .update({ 
         default_currency: currency,
         updated_at: new Date().toISOString()
       })
+      .eq('id', user.id)
 
     if (!error) {
       setSuccess(true)

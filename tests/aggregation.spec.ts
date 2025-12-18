@@ -12,6 +12,7 @@ import {
   calculateTotal,
   calculateCategoryTotals,
 } from './mocks/supabase-mock'
+import { parseSearchQuery } from '../src/lib/searchUtils'
 
 test.describe('Expense Aggregation Logic', () => {
   test('should calculate correct expense total', () => {
@@ -126,62 +127,9 @@ test.describe('Dashboard Data Integrity', () => {
 
 /**
  * Tests for the advanced search query parser.
- * Mirrors the parseSearchQuery function in ExpenseFilters.
+ * Tests the actual parseSearchQuery function from searchUtils.
  */
 test.describe('Search Query Parser', () => {
-  /**
-   * Local implementation of parseSearchQuery for testing.
-   * This mirrors the actual implementation.
-   */
-  function parseSearchQuery(query: string): {
-    plainText: string
-    merchant?: string
-    category?: string
-    amountMin?: number
-    amountMax?: number
-  } {
-    const result: ReturnType<typeof parseSearchQuery> = { plainText: '' }
-    
-    // Extract merchant: operator
-    const merchantMatch = query.match(/merchant:(\S+)/i)
-    if (merchantMatch) {
-      result.merchant = merchantMatch[1]
-      query = query.replace(merchantMatch[0], '')
-    }
-    
-    // Extract category: operator
-    const categoryMatch = query.match(/category:(\S+)/i)
-    if (categoryMatch) {
-      result.category = categoryMatch[1]
-      query = query.replace(categoryMatch[0], '')
-    }
-    
-    // Extract amount:>N operator
-    const amountGtMatch = query.match(/amount:>(\d+(?:\.\d+)?)/i)
-    if (amountGtMatch) {
-      result.amountMin = parseFloat(amountGtMatch[1])
-      query = query.replace(amountGtMatch[0], '')
-    }
-    
-    // Extract amount:<N operator
-    const amountLtMatch = query.match(/amount:<(\d+(?:\.\d+)?)/i)
-    if (amountLtMatch) {
-      result.amountMax = parseFloat(amountLtMatch[1])
-      query = query.replace(amountLtMatch[0], '')
-    }
-    
-    // Extract amount:N-M range operator
-    const amountRangeMatch = query.match(/amount:(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)/i)
-    if (amountRangeMatch) {
-      result.amountMin = parseFloat(amountRangeMatch[1])
-      result.amountMax = parseFloat(amountRangeMatch[2])
-      query = query.replace(amountRangeMatch[0], '')
-    }
-    
-    result.plainText = query.trim()
-    return result
-  }
-
   test('should extract merchant operator', () => {
     const result = parseSearchQuery('merchant:Starbucks coffee')
     expect(result.merchant).toBe('Starbucks')

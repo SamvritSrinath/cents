@@ -5,13 +5,6 @@
  * @module components/dashboard/SpendingChartWrapper
  */
 
-/**
- * @fileoverview Spending chart wrapper with time range selector.
- * Allows toggling between different time period views.
- * 
- * @module components/dashboard/SpendingChartWrapper
- */
-
 'use client'
 
 import React, { useState } from 'react'

@@ -1,12 +1,5 @@
 /**
  * @fileoverview Weekly spending statistics component.
- * Bar chart showing daily spending with week-over-week comparison.
- * 
- * @module components/dashboard/WeeklyStats
- */
-
-/**
- * @fileoverview Weekly spending statistics component.
  * Bar chart showing daily spending with week-over-week comparison and visual indicators.
  * 
  * @module components/dashboard/WeeklyStats

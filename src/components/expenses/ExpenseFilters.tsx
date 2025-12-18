@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/command'
 import { useExpenseFilters } from '@/hooks/useExpenseFilters'
 import { cn } from '@/lib/utils'
+import { parseSearchQuery } from '@/lib/searchUtils'
 
 /**
  * Minimal category data needed for filtering.
@@ -52,59 +53,6 @@ interface ExpenseFiltersProps {
 }
 
 
-
-/**
- * Parse advanced search query for operators.
- * Extracts special operators and returns remaining plain text.
- */
-function parseSearchQuery(query: string): {
-  plainText: string
-  merchant?: string
-  category?: string
-  amountMin?: number
-  amountMax?: number
-} {
-  const result: ReturnType<typeof parseSearchQuery> = { plainText: '' }
-  
-  // Extract merchant: operator
-  const merchantMatch = query.match(/merchant:(\S+)/i)
-  if (merchantMatch) {
-    result.merchant = merchantMatch[1]
-    query = query.replace(merchantMatch[0], '')
-  }
-  
-  // Extract category: operator
-  const categoryMatch = query.match(/category:(\S+)/i)
-  if (categoryMatch) {
-    result.category = categoryMatch[1]
-    query = query.replace(categoryMatch[0], '')
-  }
-  
-  // Extract amount:>N operator
-  const amountGtMatch = query.match(/amount:>(\d+(?:\.\d+)?)/i)
-  if (amountGtMatch) {
-    result.amountMin = parseFloat(amountGtMatch[1])
-    query = query.replace(amountGtMatch[0], '')
-  }
-  
-  // Extract amount:<N operator
-  const amountLtMatch = query.match(/amount:<(\d+(?:\.\d+)?)/i)
-  if (amountLtMatch) {
-    result.amountMax = parseFloat(amountLtMatch[1])
-    query = query.replace(amountLtMatch[0], '')
-  }
-  
-  // Extract amount:N-M range operator
-  const amountRangeMatch = query.match(/amount:(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)/i)
-  if (amountRangeMatch) {
-    result.amountMin = parseFloat(amountRangeMatch[1])
-    result.amountMax = parseFloat(amountRangeMatch[2])
-    query = query.replace(amountRangeMatch[0], '')
-  }
-  
-  result.plainText = query.trim()
-  return result
-}
 
 /**
  * Advanced expense filtering UI.
