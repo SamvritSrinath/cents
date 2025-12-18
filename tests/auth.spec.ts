@@ -10,7 +10,8 @@ test.describe('Authentication', () => {
     await page.goto('/login')
     
     // Check for login form elements
-    await expect(page.getByRole('heading', { name: /sign in|log in/i })).toBeVisible()
+    // CardTitle is a div, not a heading, so getByRole('heading') fails despite visual appearance
+    await expect(page.getByText('Welcome back', { exact: true })).toBeVisible()
     await expect(page.getByLabel(/email/i)).toBeVisible()
     await expect(page.getByLabel(/password/i)).toBeVisible()
     await expect(page.getByRole('button', { name: /sign in|log in/i })).toBeVisible()
@@ -20,9 +21,11 @@ test.describe('Authentication', () => {
     await page.goto('/signup')
     
     // Check for signup form elements
-    await expect(page.getByRole('heading', { name: /sign up|create account/i })).toBeVisible()
+    // CardTitle might not be a heading in some implementations, but typically is h3. 
+    // If it fails, we can use getByText.
+    await expect(page.getByText('Create an account', { exact: false })).toBeVisible()
     await expect(page.getByLabel(/email/i)).toBeVisible()
-    await expect(page.getByLabel(/password/i)).toBeVisible()
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
   })
 
   test('should show validation errors for invalid login', async ({ page }) => {

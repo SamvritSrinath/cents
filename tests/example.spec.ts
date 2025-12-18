@@ -21,7 +21,8 @@ test.describe('Home Page', () => {
     await page.goto('/')
     
     // Check for login/signup links or authenticated navigation
-    const hasAuthLinks = await page.getByRole('link', { name: /login|sign in|get started/i }).isVisible()
+    // Use .first() or specific name to avoid strict mode violation if multiple links match regex
+    const hasAuthLinks = await page.getByRole('link', { name: 'Sign in' }).isVisible()
       .catch(() => false)
     const hasDashboard = await page.getByRole('link', { name: /dashboard/i }).isVisible()
       .catch(() => false)

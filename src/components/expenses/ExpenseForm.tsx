@@ -379,7 +379,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
                         id="interval"
                         className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                         value={interval}
-                        onChange={(e) => setInterval(e.target.value as any)}
+                        onChange={(e) => setInterval(e.target.value as 'weekly' | 'monthly' | 'yearly')}
                       >
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>

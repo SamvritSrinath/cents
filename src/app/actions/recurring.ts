@@ -54,7 +54,7 @@ export async function processRecurringExpenses() {
 
     // Calculate next due date
     const currentDueDate = new Date(recurring.next_due_date)
-    let nextDate = new Date(currentDueDate)
+    const nextDate = new Date(currentDueDate)
 
     if (recurring.interval === 'weekly') {
       nextDate.setDate(nextDate.getDate() + 7)

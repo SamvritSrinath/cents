@@ -26,12 +26,12 @@ export default async function HomePage() {
               <span className="font-semibold text-lg">Cents</span>
             </div>
             <div className="flex items-center gap-3">
-              <Link href="/login">
-                <Button variant="ghost">Sign in</Button>
-              </Link>
-              <Link href="/signup">
-                <Button>Get Started</Button>
-              </Link>
+              <Button variant="ghost" asChild>
+                <Link href="/login">Sign in</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/signup">Get Started</Link>
+              </Button>
             </div>
           </div>
         </div>
@@ -58,17 +58,17 @@ export default async function HomePage() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/signup">
-              <Button size="lg" className="gap-2 w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto" asChild>
+              <Link href="/signup">
                 Start Tracking Free
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="https://github.com/yourusername/cents" target="_blank">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
+              <Link href="https://github.com/yourusername/cents" target="_blank">
                 View on GitHub
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -117,12 +117,12 @@ export default async function HomePage() {
           <p className="text-muted-foreground mb-8">
             Join thousands of users who trust Cents for their expense tracking.
           </p>
-          <Link href="/signup">
-            <Button size="lg" className="gap-2">
+          <Button size="lg" asChild>
+            <Link href="/signup">
               Get Started for Free
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Link>
+          </Button>
         </div>
       </section>
 

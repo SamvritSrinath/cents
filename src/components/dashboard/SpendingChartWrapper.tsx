@@ -46,7 +46,7 @@ export function SpendingChartWrapper({ data, dailyData }: SpendingChartWrapperPr
   const range = TIME_RANGES.find(r => r.label === selectedLabel)!
   
   // Filter data based on selected range type
-  let filteredData: any[] = []
+  let filteredData: (MonthlyData | { month: string; total_amount: number; expense_count: number })[] = []
   
   if (range.type === 'daily') {
     // For daily view, take the last N days

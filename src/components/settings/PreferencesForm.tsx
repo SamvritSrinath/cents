@@ -38,6 +38,7 @@ export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
 
   // Avoid hydration mismatch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/all, react-hooks/exhaustive-deps
     setMounted(true)
   }, [])
 
