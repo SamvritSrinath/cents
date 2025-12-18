@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/dashboard/Sidebar'
+import { RecurringExpensesManager } from '@/components/expenses/RecurringExpensesManager'
 
 export default async function DashboardLayout({
   children,
@@ -31,6 +32,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen bg-background">
       <Sidebar user={userInfo} />
+      <RecurringExpensesManager />
       <main className="flex-1 overflow-auto">
         <div className="h-full p-6 lg:p-8">
           {children}

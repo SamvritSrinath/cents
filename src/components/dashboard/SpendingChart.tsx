@@ -17,21 +17,29 @@ interface SpendingChartProps {
     total_amount: number
     expense_count: number
   }[]
+  granularity?: 'daily' | 'monthly'
 }
 
-export function SpendingChart({ data }: SpendingChartProps) {
+export function SpendingChart({ data, granularity = 'monthly' }: SpendingChartProps) {
   // Format data for chart
   const chartData = data
     .slice()
     .reverse()
-    .map((item) => ({
-      name: new Date(item.month).toLocaleDateString('en-US', { month: 'short' }),
-      amount: Number(item.total_amount),
-      count: item.expense_count,
-    }))
+    .map((item) => {
+      const [year, month, day] = item.month.split('-').map(Number)
+      const date = new Date(year, month - 1, day || 1)
+      return {
+        name: date.toLocaleDateString('en-US', { 
+          month: 'short',
+          day: granularity === 'daily' ? 'numeric' : undefined
+        }),
+        amount: Number(item.total_amount),
+        count: item.expense_count,
+      }
+    })
 
   return (
-    <div className="h-[300px] w-full">
+    <div className="h-[300px] w-full" style={{ minHeight: '300px' }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}

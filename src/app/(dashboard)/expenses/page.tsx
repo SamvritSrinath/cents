@@ -1,15 +1,94 @@
+/**
+ * @fileoverview Expenses list page with search, filtering, and export.
+ * Server Component that fetches expenses and renders with client filters.
+ * 
+ * @module app/(dashboard)/expenses/page
+ */
+
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import type { Expense, Category } from '@/types/database'
+import { ExpenseFilters } from '@/components/expenses/ExpenseFilters'
+import { ExportButton } from '@/components/expenses/ExportButton'
+import { DeleteExpenseButton } from '@/components/expenses/DeleteExpenseButton'
 
 type ExpenseWithCategory = Expense & { category?: Pick<Category, 'name' | 'icon' | 'color'> | null }
 
-export default async function ExpensesPage() {
+/**
+ * Search params for filtering expenses.
+ */
+interface SearchParams {
+  q?: string
+  from?: string
+  to?: string
+  category?: string
+  sort?: string
+  order?: string
+}
+
+/**
+ * Apply filters to expenses array.
+ */
+function applyFilters(
+  expenses: ExpenseWithCategory[],
+  params: SearchParams
+): ExpenseWithCategory[] {
+  let filtered = [...expenses]
+
+  // Text search
+  if (params.q) {
+    const query = params.q.toLowerCase()
+    filtered = filtered.filter(e => 
+      e.merchant?.toLowerCase().includes(query) ||
+      e.description?.toLowerCase().includes(query) ||
+      e.category?.name?.toLowerCase().includes(query)
+    )
+  }
+
+  // Date range
+  if (params.from) {
+    filtered = filtered.filter(e => e.expense_date >= params.from!)
+  }
+  if (params.to) {
+    filtered = filtered.filter(e => e.expense_date <= params.to!)
+  }
+
+  // Category
+  if (params.category) {
+    filtered = filtered.filter(e => e.category_id === params.category)
+  }
+
+  // Sort
+  const sortBy = params.sort || 'date'
+  const sortOrder = params.order || 'desc'
+  
+  filtered.sort((a, b) => {
+    let comparison = 0
+    if (sortBy === 'amount') {
+      comparison = Number(a.amount) - Number(b.amount)
+    } else if (sortBy === 'merchant') {
+      comparison = (a.merchant || '').localeCompare(b.merchant || '')
+    } else {
+      comparison = a.expense_date.localeCompare(b.expense_date)
+    }
+    return sortOrder === 'asc' ? comparison : -comparison
+  })
+
+  return filtered
+}
+
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -17,7 +96,9 @@ export default async function ExpensesPage() {
     redirect('/login')
   }
 
-  // Fetch expenses and categories separately to avoid type inference issues
+  const params = await searchParams
+
+  // Fetch expenses and categories in parallel
   const [{ data: expensesData }, { data: categoriesData }] = await Promise.all([
     supabase
       .from('expenses')
@@ -25,14 +106,14 @@ export default async function ExpensesPage() {
       .eq('user_id', user.id)
       .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(100),
+      .limit(500),
     supabase
       .from('categories')
       .select('id, name, icon, color')
       .eq('user_id', user.id)
   ])
 
-  // Create a map of category_id to category
+  // Create category map
   const categoryMap = new Map(
     (categoriesData || []).map(cat => [cat.id, cat])
   )
@@ -43,8 +124,11 @@ export default async function ExpensesPage() {
     category: expense.category_id ? categoryMap.get(expense.category_id) : null
   }))
 
-  // Group expenses by date
-  const groupedExpenses = (expenses || []).reduce<Record<string, ExpenseWithCategory[]>>((groups, expense) => {
+  // Apply filters
+  const filteredExpenses = applyFilters(expenses, params)
+
+  // Group by date
+  const groupedExpenses = filteredExpenses.reduce<Record<string, ExpenseWithCategory[]>>((groups, expense) => {
     const date = expense.expense_date
     if (!groups[date]) {
       groups[date] = []
@@ -53,6 +137,8 @@ export default async function ExpensesPage() {
     return groups
   }, {})
 
+  const categories = categoriesData || []
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -60,55 +146,56 @@ export default async function ExpensesPage() {
         <div>
           <h1 className="text-2xl font-bold">Expenses</h1>
           <p className="text-muted-foreground">
-            View and manage all your expenses
+            {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''}
+            {params.q || params.from || params.to || params.category ? ' (filtered)' : ''}
           </p>
         </div>
-        <Link href="/expenses/new">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Expense
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <ExportButton startDate={params.from} endDate={params.to} />
+          <Link href="/expenses/new" prefetch>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Expense
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Filters (placeholder for future implementation) */}
-      <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search expenses..."
-            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
-        <Button variant="outline" className="gap-2">
-          <Filter className="h-4 w-4" />
-          Filters
-        </Button>
-      </div>
+      {/* Filters */}
+      <Suspense fallback={<Skeleton className="h-20 w-full" />}>
+        <ExpenseFilters categories={categories} />
+      </Suspense>
 
       {/* Expenses List */}
       {Object.keys(groupedExpenses).length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
-              <p className="text-muted-foreground">No expenses yet.</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Start tracking your spending by adding your first expense.
+              <p className="text-muted-foreground">
+                {params.q || params.from || params.to || params.category
+                  ? 'No expenses match your filters.'
+                  : 'No expenses yet.'}
               </p>
-              <Link href="/expenses/new" className="mt-4 inline-block">
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Your First Expense
-                </Button>
-              </Link>
+              <p className="text-sm text-muted-foreground mt-1">
+                {params.q || params.from || params.to || params.category
+                  ? 'Try adjusting your search or filters.'
+                  : 'Start tracking your spending by adding your first expense.'}
+              </p>
+              {!params.q && !params.from && !params.to && !params.category && (
+                <Link href="/expenses/new" className="mt-4 inline-block" prefetch>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Your First Expense
+                  </Button>
+                </Link>
+              )}
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-6">
           {Object.entries(groupedExpenses).map(([date, dateExpenses]) => {
-            const dayTotal = dateExpenses!.reduce((sum, e) => sum + Number(e.amount), 0)
+            const dayTotal = dateExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
             
             return (
               <div key={date}>
@@ -122,11 +209,12 @@ export default async function ExpensesPage() {
                 </div>
                 <Card>
                   <CardContent className="p-0 divide-y divide-border">
-                    {dateExpenses!.map((expense) => (
+                    {dateExpenses.map((expense) => (
                       <Link
                         key={expense.id}
                         href={`/expenses/${expense.id}`}
-                        className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group"
+                        prefetch={false}
                       >
                         <div className="flex items-center gap-3">
                           <div
@@ -149,9 +237,14 @@ export default async function ExpensesPage() {
                             </p>
                           </div>
                         </div>
-                        <p className="text-sm font-semibold">
-                          -{formatCurrency(expense.amount, expense.currency)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">
+                            -{formatCurrency(expense.amount, expense.currency)}
+                          </p>
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <DeleteExpenseButton expenseId={expense.id} />
+                          </div>
+                        </div>
                       </Link>
                     ))}
                   </CardContent>

@@ -1,7 +1,15 @@
+/**
+ * @fileoverview Expense form component with optional receipt OCR scanning.
+ * Supports both manual entry and auto-fill from scanned receipts.
+ * 
+ * @module components/expenses/ExpenseForm
+ */
+
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { Lock, Unlock } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,9 +18,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, DollarSign, Calendar, Store, FileText } from 'lucide-react'
+import { ReceiptScanner } from '@/components/expenses/ReceiptScanner'
+import { Loader2, DollarSign, Calendar, Store, FileText, Camera, X } from 'lucide-react'
 import type { Category } from '@/types/database'
+import type { ParsedReceipt } from '@/lib/receiptParser'
 
+/**
+ * Zod schema for expense form validation.
+ */
 const expenseSchema = z.object({
   amount: z.string().min(1, 'Amount is required').refine(
     (val) => !isNaN(Number(val)) && Number(val) > 0,
@@ -26,8 +39,13 @@ const expenseSchema = z.object({
 
 type ExpenseFormData = z.infer<typeof expenseSchema>
 
+/**
+ * Props for ExpenseForm component.
+ */
 interface ExpenseFormProps {
+  /** Available categories for selection */
   categories: Category[]
+  /** Existing expense data for edit mode */
   expense?: {
     id: string
     amount: number
@@ -36,16 +54,31 @@ interface ExpenseFormProps {
     expense_date: string
     category_id: string | null
   }
+  /** Initial mode: 'view' shows locked form, 'edit' allows editing */
+  initialMode?: 'view' | 'edit'
 }
 
-export function ExpenseForm({ categories, expense }: ExpenseFormProps) {
+/**
+ * Expense entry form with receipt OCR scanning support.
+ * 
+ * @component
+ * @example
+ * <ExpenseForm categories={categories} />
+ */
+export function ExpenseForm({ categories, expense, initialMode = 'edit' }: ExpenseFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showScanner, setShowScanner] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(initialMode === 'edit' || !expense)
+  
+  // Recurring state
+  const [isRecurring, setIsRecurring] = useState(false)
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -58,6 +91,29 @@ export function ExpenseForm({ categories, expense }: ExpenseFormProps) {
     },
   })
 
+  // Watch interval to make sure it's captured
+  const [interval, setInterval] = useState<'weekly' | 'monthly' | 'yearly'>('monthly')
+
+  /**
+   * Handle scanned receipt data - auto-fill form fields.
+   */
+  const handleReceiptScan = useCallback((data: ParsedReceipt) => {
+    if (data.total) {
+      setValue('amount', data.total.toString())
+    }
+    if (data.merchant) {
+      setValue('merchant', data.merchant)
+    }
+    if (data.date) {
+      setValue('expense_date', data.date)
+    }
+    // Leave description empty - user can add notes if needed
+    setShowScanner(false)
+  }, [setValue])
+
+  /**
+   * Submit form data to Supabase.
+   */
   const onSubmit = async (data: ExpenseFormData) => {
     setIsLoading(true)
     setError(null)
@@ -87,7 +143,43 @@ export function ExpenseForm({ categories, expense }: ExpenseFormProps) {
         .update(expenseData)
         .eq('id', expense.id)
     } else {
+      // 1. Create the standard expense
       result = await supabase.from('expenses').insert(expenseData)
+
+      // 2. If recurring, also create recurring record
+      if (!result.error && isRecurring) {
+        // Calculate next due date based on interval
+        const nextDate = new Date(data.expense_date)
+        if (interval === 'weekly') {
+          nextDate.setDate(nextDate.getDate() + 7)
+        } else if (interval === 'monthly') {
+          nextDate.setMonth(nextDate.getMonth() + 1)
+        } else if (interval === 'yearly') {
+          nextDate.setFullYear(nextDate.getFullYear() + 1)
+        }
+
+        const recurringData = {
+          user_id: user.id,
+          amount: Number(data.amount),
+          currency: 'USD', // Default
+          category_id: data.category_id || null,
+          merchant: data.merchant || null,
+          description: data.description || null,
+          interval: interval,
+          last_generated_date: data.expense_date, // The one we just created
+          next_due_date: nextDate.toISOString().split('T')[0],
+          active: true
+        }
+
+        const recurringResult = await supabase
+          .from('recurring_expenses')
+          .insert(recurringData)
+        
+        if (recurringResult.error) {
+          console.error('Failed to create recurring expense', recurringResult.error)
+          // We don't block the UI here, but we could show a toast
+        }
+      }
     }
 
     if (result.error) {
@@ -101,126 +193,251 @@ export function ExpenseForm({ categories, expense }: ExpenseFormProps) {
   }
 
   return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <CardTitle>{expense ? 'Edit Expense' : 'Add Expense'}</CardTitle>
-        <CardDescription>
-          {expense ? 'Update the expense details' : 'Record a new expense'}
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label htmlFor="amount">Amount *</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                className="pl-9"
-                {...register('amount')}
-              />
-            </div>
-            {errors.amount && (
-              <p className="text-xs text-destructive">{errors.amount.message}</p>
-            )}
-          </div>
-
-          {/* Category */}
-          <div className="space-y-2">
-            <Label htmlFor="category_id">Category</Label>
-            <select
-              id="category_id"
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              {...register('category_id')}
-            >
-              <option value="">Select a category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.icon} {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Merchant */}
-          <div className="space-y-2">
-            <Label htmlFor="merchant">Merchant</Label>
-            <div className="relative">
-              <Store className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="merchant"
-                placeholder="e.g., Starbucks, Amazon"
-                className="pl-9"
-                {...register('merchant')}
-              />
-            </div>
-          </div>
-
-          {/* Date */}
-          <div className="space-y-2">
-            <Label htmlFor="expense_date">Date *</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="expense_date"
-                type="date"
-                className="pl-9"
-                {...register('expense_date')}
-              />
-            </div>
-            {errors.expense_date && (
-              <p className="text-xs text-destructive">{errors.expense_date.message}</p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="description"
-                placeholder="Optional notes"
-                className="pl-9"
-                {...register('description')}
-              />
-            </div>
-          </div>
-        </CardContent>
-
-        <div className="flex gap-3 p-6 pt-0">
+    <div className="space-y-4">
+      {/* Receipt Scanner Toggle */}
+      {!expense && (
+        <div className="flex justify-end">
           <Button
             type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => router.back()}
+            variant={showScanner ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowScanner(!showScanner)}
           >
-            Cancel
-          </Button>
-          <Button type="submit" className="flex-1" disabled={isLoading}>
-            {isLoading ? (
+            {showScanner ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                <X className="h-4 w-4 mr-2" />
+                Cancel Scan
               </>
-            ) : expense ? (
-              'Update Expense'
             ) : (
-              'Add Expense'
+              <>
+                <Camera className="h-4 w-4 mr-2" />
+                Scan Receipt
+              </>
             )}
           </Button>
         </div>
-      </form>
-    </Card>
+      )}
+
+      {/* Receipt Scanner */}
+      {showScanner && (
+        <ReceiptScanner
+          onScan={handleReceiptScan}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
+      {/* Main Form */}
+      <Card className="max-w-lg mx-auto">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{expense ? (isEditMode ? 'Edit Expense' : 'Expense Details') : 'Add Expense'}</CardTitle>
+              <CardDescription>
+                {expense 
+                  ? (isEditMode ? 'Update the expense details' : 'View expense details')
+                  : 'Record a new expense or scan a receipt'}
+              </CardDescription>
+            </div>
+            {expense && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditMode(!isEditMode)}
+                className="shrink-0"
+              >
+                {isEditMode ? (
+                  <Unlock className="h-4 w-4 text-primary" />
+                ) : (
+                  <Lock className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount *</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="pl-9"
+                  disabled={!isEditMode}
+                  {...register('amount')}
+                />
+              </div>
+              {errors.amount && (
+                <p className="text-xs text-destructive">{errors.amount.message}</p>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <Label htmlFor="category_id">Category</Label>
+              <select
+                id="category_id"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!isEditMode}
+                {...register('category_id')}
+              >
+                <option value="">Select a category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.icon} {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Merchant */}
+            <div className="space-y-2">
+              <Label htmlFor="merchant">Merchant</Label>
+              <div className="relative">
+                <Store className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="merchant"
+                  placeholder="e.g., Starbucks, Amazon"
+                  className="pl-9"
+                  disabled={!isEditMode}
+                  {...register('merchant')}
+                />
+              </div>
+            </div>
+
+            {/* Date */}
+            <div className="space-y-2">
+              <Label htmlFor="expense_date">Date *</Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="expense_date"
+                  type="date"
+                  className="pl-9"
+                  disabled={!isEditMode}
+                  {...register('expense_date')}
+                />
+              </div>
+              {errors.expense_date && (
+                <p className="text-xs text-destructive">{errors.expense_date.message}</p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="description"
+                  placeholder="Optional notes"
+                  className="pl-9"
+                  disabled={!isEditMode}
+                  {...register('description')}
+                />
+              </div>
+            </div>
+
+            {/* Recurring Option (New Expense Only) */}
+            {!expense && isEditMode && (
+              <div className="pt-2 border-t mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Recurring Expense</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically add this expense periodically
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="recurring"
+                      className="h-4 w-4 rounded border-gray-300"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                    />
+                  </div>
+                </div>
+
+                {isRecurring && (
+                  <div className="ml-4 pl-4 border-l-2 border-muted space-y-3 animate-accordion-down">
+                    <div className="space-y-2">
+                      <Label htmlFor="interval">Interval</Label>
+                      <select
+                        id="interval"
+                        className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                        value={interval}
+                        onChange={(e) => setInterval(e.target.value as 'weekly' | 'monthly' | 'yearly')}
+                      >
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+
+          {isEditMode && (
+            <div className="flex gap-3 p-6 pt-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => expense ? setIsEditMode(false) : router.back()}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : expense ? (
+                  'Update Expense'
+                ) : (
+                  'Add Expense'
+                )}
+              </Button>
+            </div>
+          )}
+
+          {!isEditMode && expense && (
+            <div className="flex gap-3 p-6 pt-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => router.back()}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={() => setIsEditMode(true)}
+              >
+                <Lock className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            </div>
+          )}
+        </form>
+      </Card>
+    </div>
   )
 }

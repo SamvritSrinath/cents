@@ -155,6 +155,51 @@ export interface Database {
         }
         Relationships: []
       }
+      recurring_expenses: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          currency: string
+          category_id: string | null
+          merchant: string | null
+          description: string | null
+          interval: 'weekly' | 'monthly' | 'yearly'
+          last_generated_date: string | null
+          next_due_date: string
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          currency?: string
+          category_id?: string | null
+          merchant?: string | null
+          description?: string | null
+          interval: 'weekly' | 'monthly' | 'yearly'
+          last_generated_date?: string | null
+          next_due_date: string
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          currency?: string
+          category_id?: string | null
+          merchant?: string | null
+          description?: string | null
+          interval?: 'weekly' | 'monthly' | 'yearly'
+          last_generated_date?: string | null
+          next_due_date?: string
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -182,6 +227,17 @@ export interface Database {
         }
         Returns: {
           month: string
+          total_amount: number
+          expense_count: number
+        }[]
+      }
+      get_daily_spending: {
+        Args: {
+          p_user_id: string
+          p_days?: number
+        }
+        Returns: {
+          date: string
           total_amount: number
           expense_count: number
         }[]
@@ -246,4 +302,8 @@ export type MonthlySpending = Database['public']['Functions']['get_monthly_spend
 
 /** Return type for budget progress with percentage used */
 export type BudgetProgress = Database['public']['Functions']['get_budget_progress']['Returns'][number]
+
+/** Recurring expense definition */
+export type RecurringExpense = Database['public']['Tables']['recurring_expenses']['Row']
+export type NewRecurringExpense = Database['public']['Tables']['recurring_expenses']['Insert']
 
