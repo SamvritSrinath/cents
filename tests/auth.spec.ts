@@ -9,21 +9,19 @@ test.describe('Authentication', () => {
   test('should display login page', async ({ page }) => {
     await page.goto('/login')
     
-    // Check for login form elements
-    // CardTitle is a div, not a heading, so getByRole('heading') fails despite visual appearance
-    await expect(page.getByText('Welcome back', { exact: true })).toBeVisible()
+    // Wait for Suspense boundary to resolve (skeleton -> actual form)
+    // The CardTitle with "Welcome back" only appears after hydration
+    await expect(page.getByText('Welcome back', { exact: true })).toBeVisible({ timeout: 10000 })
     await expect(page.getByLabel(/email/i)).toBeVisible()
     await expect(page.getByLabel(/password/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /sign in|log in/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
   })
 
   test('should display signup page', async ({ page }) => {
     await page.goto('/signup')
     
-    // Check for signup form elements
-    // CardTitle might not be a heading in some implementations, but typically is h3. 
-    // If it fails, we can use getByText.
-    await expect(page.getByText('Create an account', { exact: false })).toBeVisible()
+    // Wait for Suspense boundary to resolve
+    await expect(page.getByText('Create an account', { exact: false })).toBeVisible({ timeout: 10000 })
     await expect(page.getByLabel(/email/i)).toBeVisible()
     await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
   })
@@ -31,8 +29,11 @@ test.describe('Authentication', () => {
   test('should show validation errors for invalid login', async ({ page }) => {
     await page.goto('/login')
     
+    // Wait for form to be fully loaded
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible({ timeout: 10000 })
+    
     // Try to submit without filling in fields
-    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    await page.getByRole('button', { name: /sign in/i }).click()
     
     // Should show some form of validation or stay on login page
     await expect(page).toHaveURL(/login/)

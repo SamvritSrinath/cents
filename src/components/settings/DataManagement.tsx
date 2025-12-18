@@ -1,19 +1,37 @@
 /**
- * @fileoverview Data management component for export/import.
+ * @fileoverview Data management component for user data export.
+ * Handles fetching all user data (expenses, categories) and generating a CSV export.
  * 
  * @module components/settings/DataManagement
  */
 
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Download, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-export function DataManagement() {
+/**
+ * Component providing data management actions like export.
+ * Currently supports exporting expenses to CSV.
+ * 
+ * @component
+ * @returns {React.ReactElement} The rendered data management section.
+ * 
+ * @example
+ * <DataManagement />
+ */
+export function DataManagement(): React.ReactElement {
   const [isExporting, setIsExporting] = useState(false)
 
+  /**
+   * Handles the export process.
+   * 1. Fetches all expenses and categories for the current user.
+   * 2. Maps category IDs to names.
+   * 3. Generates a CSV string with proper escaping.
+   * 4. Triggers a client-side download.
+   */
   const handleExport = async () => {
     setIsExporting(true)
 
@@ -26,7 +44,7 @@ export function DataManagement() {
         return
       }
 
-      // Fetch all user data
+      // Fetch all relevant user data in parallel
       const [
         { data: expenses },
         { data: categories },
@@ -40,22 +58,23 @@ export function DataManagement() {
           .from('categories')
           .select('*')
           .eq('user_id', user.id),
-        supabase
-          .from('budgets')
-          .select('*')
-          .eq('user_id', user.id),
       ])
 
-      // Create CSV for expenses
+      // Prepare CSV Headers
       const headers = ['Date', 'Amount', 'Currency', 'Merchant', 'Category', 'Description']
+      
+      // Create a quick lookup map for categories
       const categoryMap = new Map((categories || []).map(c => [c.id, c.name]))
       
       const csvRows = [headers.join(',')]
+      
+      // Process each expense into a CSV row
       for (const expense of expenses || []) {
         const row = [
           expense.expense_date,
           expense.amount,
           expense.currency,
+          // Escape quotes in strings by doubling them and wrapping in quotes
           `"${(expense.merchant || '').replace(/"/g, '""')}"`,
           `"${(expense.category_id ? categoryMap.get(expense.category_id) || 'Uncategorized' : 'Uncategorized').replace(/"/g, '""')}"`,
           `"${(expense.description || '').replace(/"/g, '""')}"`,
@@ -63,7 +82,7 @@ export function DataManagement() {
         csvRows.push(row.join(','))
       }
 
-      // Download CSV
+      // Generate Blob and trigger download
       const csvContent = csvRows.join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
@@ -72,6 +91,8 @@ export function DataManagement() {
       link.download = `cents-expenses-${new Date().toISOString().split('T')[0]}.csv`
       document.body.appendChild(link)
       link.click()
+      
+      // Cleanup
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 

@@ -123,3 +123,120 @@ test.describe('Dashboard Data Integrity', () => {
     expect(categorySum).toBeCloseTo(total, 2)
   })
 })
+
+/**
+ * Tests for the advanced search query parser.
+ * Mirrors the parseSearchQuery function in ExpenseFilters.
+ */
+test.describe('Search Query Parser', () => {
+  /**
+   * Local implementation of parseSearchQuery for testing.
+   * This mirrors the actual implementation.
+   */
+  function parseSearchQuery(query: string): {
+    plainText: string
+    merchant?: string
+    category?: string
+    amountMin?: number
+    amountMax?: number
+  } {
+    const result: ReturnType<typeof parseSearchQuery> = { plainText: '' }
+    
+    // Extract merchant: operator
+    const merchantMatch = query.match(/merchant:(\S+)/i)
+    if (merchantMatch) {
+      result.merchant = merchantMatch[1]
+      query = query.replace(merchantMatch[0], '')
+    }
+    
+    // Extract category: operator
+    const categoryMatch = query.match(/category:(\S+)/i)
+    if (categoryMatch) {
+      result.category = categoryMatch[1]
+      query = query.replace(categoryMatch[0], '')
+    }
+    
+    // Extract amount:>N operator
+    const amountGtMatch = query.match(/amount:>(\d+(?:\.\d+)?)/i)
+    if (amountGtMatch) {
+      result.amountMin = parseFloat(amountGtMatch[1])
+      query = query.replace(amountGtMatch[0], '')
+    }
+    
+    // Extract amount:<N operator
+    const amountLtMatch = query.match(/amount:<(\d+(?:\.\d+)?)/i)
+    if (amountLtMatch) {
+      result.amountMax = parseFloat(amountLtMatch[1])
+      query = query.replace(amountLtMatch[0], '')
+    }
+    
+    // Extract amount:N-M range operator
+    const amountRangeMatch = query.match(/amount:(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)/i)
+    if (amountRangeMatch) {
+      result.amountMin = parseFloat(amountRangeMatch[1])
+      result.amountMax = parseFloat(amountRangeMatch[2])
+      query = query.replace(amountRangeMatch[0], '')
+    }
+    
+    result.plainText = query.trim()
+    return result
+  }
+
+  test('should extract merchant operator', () => {
+    const result = parseSearchQuery('merchant:Starbucks coffee')
+    expect(result.merchant).toBe('Starbucks')
+    expect(result.plainText).toBe('coffee')
+  })
+
+  test('should extract category operator', () => {
+    const result = parseSearchQuery('category:Food groceries')
+    expect(result.category).toBe('Food')
+    expect(result.plainText).toBe('groceries')
+  })
+
+  test('should extract amount greater than operator', () => {
+    const result = parseSearchQuery('amount:>50 expensive')
+    expect(result.amountMin).toBe(50)
+    expect(result.plainText).toBe('expensive')
+  })
+
+  test('should extract amount less than operator', () => {
+    const result = parseSearchQuery('amount:<100')
+    expect(result.amountMax).toBe(100)
+    expect(result.plainText).toBe('')
+  })
+
+  test('should extract amount range operator', () => {
+    const result = parseSearchQuery('amount:25-75')
+    expect(result.amountMin).toBe(25)
+    expect(result.amountMax).toBe(75)
+  })
+
+  test('should handle multiple operators', () => {
+    const result = parseSearchQuery('merchant:Target category:Shopping amount:>20')
+    expect(result.merchant).toBe('Target')
+    expect(result.category).toBe('Shopping')
+    expect(result.amountMin).toBe(20)
+    expect(result.plainText).toBe('')
+  })
+
+  test('should handle plain text only', () => {
+    const result = parseSearchQuery('coffee latte')
+    expect(result.merchant).toBeUndefined()
+    expect(result.category).toBeUndefined()
+    expect(result.amountMin).toBeUndefined()
+    expect(result.amountMax).toBeUndefined()
+    expect(result.plainText).toBe('coffee latte')
+  })
+
+  test('should handle decimal amounts', () => {
+    const result = parseSearchQuery('amount:>25.50')
+    expect(result.amountMin).toBe(25.50)
+  })
+
+  test('should be case insensitive', () => {
+    const result = parseSearchQuery('MERCHANT:Walmart AMOUNT:>100')
+    expect(result.merchant).toBe('Walmart')
+    expect(result.amountMin).toBe(100)
+  })
+})

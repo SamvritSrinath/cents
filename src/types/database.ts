@@ -17,9 +17,17 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+/**
+ * Main Supabase Database definition.
+ * Contains schema definitions for public tables, views, and functions.
+ */
 export interface Database {
   public: {
     Tables: {
+      /**
+       * User profiles extending default auth.users.
+       * Stores display info and preferences.
+       */
       profiles: {
         Row: {
           id: string
@@ -47,6 +55,10 @@ export interface Database {
         }
         Relationships: []
       }
+      /**
+       * Expense categories for classification.
+       * Users can define their own custom categories.
+       */
       categories: {
         Row: {
           id: string
@@ -80,6 +92,10 @@ export interface Database {
         }
         Relationships: []
       }
+      /**
+       * Main expenses table storing individual transactions.
+       * Links to users and categories.
+       */
       expenses: {
         Row: {
           id: string
@@ -122,6 +138,10 @@ export interface Database {
         }
         Relationships: []
       }
+      /**
+       * Budgets for expense tracking against targets.
+       * Can be set per category with different time periods.
+       */
       budgets: {
         Row: {
           id: string
@@ -155,6 +175,10 @@ export interface Database {
         }
         Relationships: []
       }
+      /**
+       * Recurring expense templates.
+       * Used to automatically generate standard expenses periodically.
+       */
       recurring_expenses: {
         Row: {
           id: string

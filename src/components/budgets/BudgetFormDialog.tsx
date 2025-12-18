@@ -1,12 +1,13 @@
 /**
- * @fileoverview Budget form dialog for creating and editing budgets.
+ * @fileoverview Dialog component containing a form for creating and editing budgets.
+ * Handles validation, submission to Supabase, and conditional rendering based on mode.
  * 
  * @module components/budgets/BudgetFormDialog
  */
 
 'use client'
 
-import { useState, useCallback, ReactNode } from 'react'
+import React, { useState, useCallback, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -26,40 +27,64 @@ import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Category } from '@/types/database'
 
+/**
+ * Validation schema for budget form data.
+ */
 const budgetSchema = z.object({
+  /** Category ID to associate the budget with */
   category_id: z.string().min(1, 'Please select a category'),
+  /** Budget limit amount (must be positive) */
   amount: z.string().min(1, 'Amount is required').refine(
     (val) => !isNaN(Number(val)) && Number(val) > 0,
     'Amount must be a positive number'
   ),
+  /** Reset period for the budget */
   period: z.enum(['weekly', 'monthly', 'yearly']),
 })
 
+/**
+ * Type alias for inferred form data structure.
+ */
 type BudgetFormData = z.infer<typeof budgetSchema>
 
+/**
+ * Props for BudgetFormDialog component.
+ */
 interface BudgetFormDialogProps {
+  /** Mode determining if creating a new budget or editing an existing one */
   mode: 'create' | 'edit'
+  /** List of categories available for selection */
   categories: Pick<Category, 'id' | 'name' | 'icon' | 'color'>[]
+  /** Existing budget data (required if mode is 'edit') */
   budget?: {
     id: string
     category_id: string
     amount: number
     period: 'weekly' | 'monthly' | 'yearly'
   }
+  /** Trigger element that will open the dialog */
   children: ReactNode
 }
 
 /**
- * Dialog for creating or editing budgets.
+ * Interactive dialog form for budget management.
  * 
  * @component
+ * @param {BudgetFormDialogProps} props - Configuration and data for the form.
+ * @returns {React.ReactElement} Dialog component wrapping a form.
+ * 
+ * @example
+ * <BudgetFormDialog mode="create" categories={availableCategories}>
+ *   <Button>Add Budget</Button>
+ * </BudgetFormDialog>
  */
-export function BudgetFormDialog({ mode, categories, budget, children }: BudgetFormDialogProps) {
+export function BudgetFormDialog({ mode, categories, budget, children }: BudgetFormDialogProps): React.ReactElement {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Initialize form handling with Zod validation
   const {
     register,
     handleSubmit,
@@ -74,6 +99,12 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
     },
   })
 
+  /**
+   * Handles form submission.
+   * Creates or updates a budget record in Supabase based on the mode.
+   * 
+   * @param {BudgetFormData} data - Validated form data.
+   */
   const onSubmit = useCallback(async (data: BudgetFormData) => {
     setIsLoading(true)
     setError(null)
@@ -87,16 +118,18 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
       return
     }
 
+    // Prepare payload for DB
     const budgetData = {
       user_id: user.id,
       category_id: data.category_id,
       amount: Number(data.amount),
       period: data.period,
-      start_date: new Date().toISOString().split('T')[0],
+      start_date: new Date().toISOString().split('T')[0], // Defaults to today
     }
 
     let result
     if (mode === 'edit' && budget) {
+      // Update existing record
       result = await supabase
         .from('budgets')
         .update({
@@ -105,6 +138,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
         })
         .eq('id', budget.id)
     } else {
+      // Insert new record
       result = await supabase.from('budgets').insert(budgetData)
     }
 
@@ -114,6 +148,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
       return
     }
 
+    // Reset state and refresh data on success
     setOpen(false)
     reset()
     router.refresh()
@@ -123,6 +158,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       setOpen(isOpen)
+      // Reset form state when dialog closes/reopens
       if (!isOpen) {
         reset({
           category_id: budget?.category_id || '',
@@ -152,7 +188,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
             </div>
           )}
 
-          {/* Category */}
+          {/* Category Selection (Disabled in edit mode to prevent changing context) */}
           <div className="space-y-2">
             <Label htmlFor="category_id">Category</Label>
             <select
@@ -173,7 +209,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
             )}
           </div>
 
-          {/* Amount */}
+          {/* Amount Input */}
           <div className="space-y-2">
             <Label htmlFor="amount">Budget Amount</Label>
             <div className="relative">
@@ -192,7 +228,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
             )}
           </div>
 
-          {/* Period */}
+          {/* Period Selection */}
           <div className="space-y-2">
             <Label htmlFor="period">Budget Period</Label>
             <select
@@ -206,7 +242,7 @@ export function BudgetFormDialog({ mode, categories, budget, children }: BudgetF
             </select>
           </div>
 
-          {/* Actions */}
+          {/* Form Actions */}
           <div className="flex gap-3 pt-2">
             <Button
               type="button"

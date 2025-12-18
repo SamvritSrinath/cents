@@ -5,25 +5,33 @@
  * @module components/dashboard/CategoryDonut
  */
 
+/**
+ * @fileoverview Category spending donut chart component.
+ * Visualizes spending distribution across categories with automatic aggregation of smaller categories.
+ * 
+ * @module components/dashboard/CategoryDonut
+ */
+
 'use client'
 
+import React from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
 
 /**
- * Data point for the donut chart.
+ * Data point for the donut chart representing a spending category.
  * Includes index signature for Recharts compatibility.
  */
 interface CategoryData {
-  /** Category ID */
+  /** Unique Category ID (or 'other' for aggregated) */
   id: string
-  /** Category name */
+  /** Category display name */
   name: string
-  /** Total spent in this category */
+  /** Total amount spent in this category */
   amount: number
-  /** Category color (hex) */
+  /** Hex color code for the chart segment */
   color: string
-  /** Category icon */
+  /** Emoji icon for the category */
   icon: string
   /** Index signature for Recharts */
   [key: string]: string | number
@@ -35,14 +43,16 @@ interface CategoryData {
 interface CategoryDonutProps {
   /** Array of category spending data */
   data: CategoryData[]
-  /** Total spending across all categories */
+  /** Total spending across all categories (display in center) */
   total: number
 }
 
 /**
- * Custom tooltip for the donut chart.
+ * Custom tooltip for the donut chart showing icon, name, and amount.
+ * 
+ * @param props - Tooltip props from Recharts
  */
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: CategoryData }> }) {
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: CategoryData }> }): React.ReactElement | null {
   if (!active || !payload?.length) return null
   
   const data = payload[0].payload
@@ -60,13 +70,18 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
 
 /**
  * Donut chart showing spending by category.
+ * Aggregates categories outside top 5 into an "Other" segment.
+ * Displays total spending in the center.
  * 
  * @component
+ * @param {CategoryDonutProps} props - Category data and total.
+ * @returns {React.ReactElement} Donut chart with legend and center text.
+ * 
  * @example
  * <CategoryDonut data={categoryData} total={totalSpending} />
  */
-export function CategoryDonut({ data, total }: CategoryDonutProps) {
-  // Handle empty state
+export function CategoryDonut({ data, total }: CategoryDonutProps): React.ReactElement {
+  // Handle empty state gracefully
   if (!data.length) {
     return (
       <div className="h-[250px] flex items-center justify-center text-muted-foreground">
@@ -75,13 +90,26 @@ export function CategoryDonut({ data, total }: CategoryDonutProps) {
     )
   }
 
-  // Sort by amount and take top 5, group rest as "Other"
+  // Optimize chart readability:
+  // 1. Sort by amount descending
+  // 2. Keep top 5 biggest categories
+  // 3. Aggregate the rest into "Other"
   const sortedData = [...data].sort((a, b) => b.amount - a.amount)
   const topCategories = sortedData.slice(0, 5)
   const otherAmount = sortedData.slice(5).reduce((sum, cat) => sum + cat.amount, 0)
   
-  const chartData = otherAmount > 0
-    ? [...topCategories, { id: 'other', name: 'Other', amount: otherAmount, color: '#6b7280', icon: '📦' }]
+  // Construct final dataset for chart
+  const chartData: CategoryData[] = otherAmount > 0
+    ? [
+        ...topCategories, 
+        { 
+          id: 'other', 
+          name: 'Other', 
+          amount: otherAmount, 
+          color: '#6b7280', // Gray for "Other"
+          icon: '📦' 
+        }
+      ]
     : topCategories
 
   return (
@@ -94,7 +122,7 @@ export function CategoryDonut({ data, total }: CategoryDonutProps) {
             cy="50%"
             innerRadius={60}
             outerRadius={90}
-            paddingAngle={2}
+            paddingAngle={2} // Gap between segments
             dataKey="amount"
             nameKey="name"
           >
@@ -118,7 +146,7 @@ export function CategoryDonut({ data, total }: CategoryDonutProps) {
         </PieChart>
       </ResponsiveContainer>
       
-      {/* Center text showing total */}
+      {/* Center text showing total spending (Absolute positioning) */}
       <div className="relative -mt-[170px] flex flex-col items-center pointer-events-none">
         <span className="text-xs text-muted-foreground">Total</span>
         <span className="text-lg font-bold">{formatCurrency(total)}</span>

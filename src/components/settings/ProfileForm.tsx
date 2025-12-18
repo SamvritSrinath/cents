@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,24 +18,62 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Loader2, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
+/**
+ * Validation schema for profile form data using Zod.
+ * Defines constraints for user profile fields.
+ * 
+ * @constant
+ * @type {z.ZodObject}
+ */
 const profileSchema = z.object({
   display_name: z.string().max(50, 'Name too long').optional(),
 })
 
+/**
+ * Type definition for inferred profile form data.
+ * Derived from the Zod schema.
+ * 
+ * @typedef {Object} ProfileFormData
+ * @property {string | undefined} display_name - The display name entered by the user.
+ */
 type ProfileFormData = z.infer<typeof profileSchema>
 
+/**
+ * Props for the ProfileForm component.
+ * 
+ * @interface ProfileFormProps
+ */
 interface ProfileFormProps {
+  /**
+   * The user's current profile information.
+   */
   profile: {
+    /** The current display name of the user. */
     display_name: string
+    /** The URL of the user's avatar image. */
     avatar_url: string
   }
+  /** The email address of the user. */
   email: string
 }
 
-export function ProfileForm({ profile, email }: ProfileFormProps) {
+/**
+ * Form component for updating user profile information.
+ * Allows users to change their display name.
+ * 
+ * @component
+ * @param {ProfileFormProps} props - The component props.
+ * @returns {JSX.Element} The rendered profile form.
+ * 
+ * @example
+ * const profile = { display_name: 'John Doe', avatar_url: '' }
+ * const email = 'john@example.com'
+ * return <ProfileForm profile={profile} email={email} />
+ */
+export function ProfileForm({ profile, email }: ProfileFormProps): React.ReactElement {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [success, setSuccess] = useState<boolean>(false)
 
   const {
     register,
@@ -48,11 +86,22 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
     },
   })
 
-  const initials = profile.display_name
+  // Calculate initials for the avatar fallback.
+  // Uses the first letter of each part of the display name (up to 2),
+  // or the first letter of the email if no display name is present.
+  const initials: string = profile.display_name
     ? profile.display_name.split(' ').map(n => n[0]).join('').toUpperCase()
     : email?.charAt(0).toUpperCase() || 'U'
 
-  const onSubmit = async (data: ProfileFormData) => {
+  /**
+   * Handles the form submission.
+   * Updates the user's profile in Supabase.
+   * 
+   * @async
+   * @param {ProfileFormData} data - The validated form data.
+   * @returns {Promise<void>}
+   */
+  const onSubmit = async (data: ProfileFormData): Promise<void> => {
     setIsLoading(true)
     setSuccess(false)
 
@@ -64,10 +113,15 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
       return
     }
 
+    // Perform upsert operation on the 'profiles' table.
+    // We use upsert to handle both creation and update logic.
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name: data.display_name || null })
-      .eq('id', user.id)
+      .upsert({ 
+        id: user.id,
+        display_name: data.display_name || null,
+        updated_at: new Date().toISOString()
+      })
 
     if (!error) {
       setSuccess(true)

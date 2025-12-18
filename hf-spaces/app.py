@@ -140,16 +140,20 @@ PRODUCT_CONFLICT_MERCHANTS = {'Starbucks', 'Target'}
 
 def extract_merchant(text: str, lines: list[str]) -> tuple[Optional[str], float]:
     """
-    Extract merchant name from OCR text.
-    
-    Strategy:
-    1. Check for unique brand indicators ANYWHERE in text (Target Circle, Costco Wholesale, etc.)
-    2. Check first 5 lines for known merchant patterns (highest confidence)
-    3. For merchants that often appear as products, ONLY check header
-    4. Check full text for other known patterns
-    5. Use first substantial line as fallback
-    
-    Returns: (merchant_name, confidence_boost)
+    Extract merchant name from OCR text using a multi-strategy approach.
+
+    Strategies include checking for brand-specific indicators, analyzing the header
+    (first 5 lines) for known merchants, and scanning the full text for non-conflicting
+    merchant names. Fallback logic inspects the first substantial line.
+
+    Args:
+        text: The full raw text extracted from the receipt.
+        lines: A list of individual text lines from the receipt.
+
+    Returns:
+        A tuple containing:
+            - The detected merchant name (str) or None if not found.
+            - A confidence score boost (float) associated with the reliability of the match.
     """
     # Brand-specific indicators that ONLY appear on that store's receipts
     brand_indicators = [
@@ -207,9 +211,18 @@ def extract_merchant(text: str, lines: list[str]) -> tuple[Optional[str], float]
 
 def extract_total(text: str) -> tuple[Optional[float], float]:
     """
-    Extract total amount from receipt text.
-    
-    Returns: (total_amount, confidence_boost)
+    Extract total amount from receipt text using regex patterns.
+
+    Prioritizes explicit "TOTAL" labels, then looks for other payment indicators like
+    "AMOUNT DUE" or "VISA". Falls back to finding the largest valid currency amount.
+
+    Args:
+        text: The full raw text extracted from the receipt.
+
+    Returns:
+        A tuple containing:
+            - The extracted total amount (float) or None if not found.
+            - A confidence score boost (float) indicating reliability.
     """
     patterns = [
         # Explicit TOTAL patterns (highest confidence)
@@ -246,7 +259,15 @@ def extract_total(text: str) -> tuple[Optional[float], float]:
 
 
 def extract_subtotal(text: str) -> Optional[float]:
-    """Extract subtotal amount from receipt text."""
+    """
+    Extract subtotal amount from receipt text.
+
+    Args:
+        text: The full raw text extracted from the receipt.
+
+    Returns:
+        The extracted subtotal amount (float) or None if not found.
+    """
     patterns = [
         r'\bSUBTOTAL\s*[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b',
         r'\bSUB\s*TOTAL\s*[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b',
@@ -267,9 +288,18 @@ def extract_subtotal(text: str) -> Optional[float]:
 
 def extract_date(text: str) -> tuple[Optional[str], float]:
     """
-    Extract date from receipt text.
-    
-    Returns: (date_string in YYYY-MM-DD format, confidence_boost)
+    Extract date from receipt text supporting multiple formats.
+
+    Supports MM/DD/YYYY, YYYY-MM-DD, and named months (e.g., Jan 01, 2023).
+    Validates that the date is within a reasonable range (5 years past to 30 days future).
+
+    Args:
+        text: The full raw text extracted from the receipt.
+
+    Returns:
+        A tuple containing:
+            - The extracted date string in 'YYYY-MM-DD' format or None.
+            - A confidence score boost (float).
     """
     patterns = [
         # MM/DD/YYYY or MM-DD-YYYY (most common US format)
@@ -316,7 +346,17 @@ def extract_date(text: str) -> tuple[Optional[str], float]:
 
 
 def extract_line_items(lines: list[str]) -> list[LineItem]:
-    """Extract individual line items from receipt."""
+    """
+    Extract individual line items (name and price) from receipt lines.
+
+    Filters out total/subtotal lines and parses lines matching the "Item Name ... Price" pattern.
+
+    Args:
+        lines: A list of text lines from the receipt.
+
+    Returns:
+        A list of LineItem objects containing name and price.
+    """
     items = []
     
     # Pattern: item name followed by price (with optional tax indicator)
@@ -344,13 +384,16 @@ def extract_line_items(lines: list[str]) -> list[LineItem]:
 def parse_receipt_text(ocr_results: list, raw_text: str) -> OCRResult:
     """
     Parse OCR results into structured receipt data.
-    
+
+    Aggregates results from individual extraction functions (merchant, total, date, items)
+    and computes an overall confidence score.
+
     Args:
-        ocr_results: Raw PaddleOCR output
-        raw_text: Concatenated text from OCR
-    
+        ocr_results: Raw output list from PaddleOCR (unused in current logic, kept for interface compatibility).
+        raw_text: Concatenated full text extracted from the receipt.
+
     Returns:
-        OCRResult with extracted fields
+        OCRResult object containing extracted fields and confidence score.
     """
     lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
     confidence = 0.0
@@ -405,12 +448,18 @@ async def health():
 async def process_receipt(file: UploadFile = File(...)):
     """
     Process a receipt image and extract structured data.
-    
+
+    Accepts an image file, runs PaddleOCR to extract text, and then parses
+    the text to identify receipt fields (merchant, total, date, items).
+
     Args:
-        file: Image file (JPEG, PNG, etc.)
-    
+        file: Uploaded image file (e.g., JPEG, PNG).
+
     Returns:
-        OCRResult with extracted merchant, total, date, items
+        OCRResult: Structural data extracted from the receipt.
+
+    Raises:
+        HTTPException: If the file is not an image or processing fails.
     """
     # Validate file type
     if not file.content_type or not file.content_type.startswith('image/'):

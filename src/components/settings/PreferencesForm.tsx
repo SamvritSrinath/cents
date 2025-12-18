@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,13 @@ import { Label } from '@/components/ui/label'
 import { Loader2, Moon, Sun, Monitor } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
+/**
+ * List of supported currencies with their details.
+ * Used for the currency selection dropdown.
+ * 
+ * @constant
+ * @type {Array<{code: string, name: string, symbol: string}>}
+ */
 const CURRENCIES = [
   { code: 'USD', name: 'US Dollar', symbol: '$' },
   { code: 'EUR', name: 'Euro', symbol: '€' },
@@ -24,25 +31,50 @@ const CURRENCIES = [
   { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
 ]
 
+/**
+ * Props for the PreferencesForm component.
+ * 
+ * @interface PreferencesFormProps
+ */
 interface PreferencesFormProps {
+  /** The user's default currency code (e.g., 'USD'). */
   defaultCurrency: string
 }
 
-export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
+/**
+ * Form component for updating user preferences.
+ * Allows users to change their default currency and application theme.
+ * 
+ * @component
+ * @param {PreferencesFormProps} props - The component props.
+ * @returns {JSX.Element} The rendered preferences form.
+ * 
+ * @example
+ * return <PreferencesForm defaultCurrency="USD" />
+ */
+export function PreferencesForm({ defaultCurrency }: PreferencesFormProps): React.ReactElement {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
-  const [currency, setCurrency] = useState(defaultCurrency)
-  const [isLoading, setIsLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const [currency, setCurrency] = useState<string>(defaultCurrency)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [success, setSuccess] = useState<boolean>(false)
+  const [mounted, setMounted] = useState<boolean>(false)
 
-  // Avoid hydration mismatch
+  // Avoid hydration mismatch by ensuring the component is mounted
+  // before rendering theme-dependent UI.
   useEffect(() => {
     // eslint-disable-next-line
     setMounted(true)
   }, [])
 
-  const handleSave = async () => {
+  /**
+   * Handles the saving of preference changes (currency).
+   * Theme changes are handled immediately by next-themes.
+   * 
+   * @async
+   * @returns {Promise<void>}
+   */
+  const handleSave = async (): Promise<void> => {
     setIsLoading(true)
     setSuccess(false)
 
@@ -56,8 +88,11 @@ export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
 
     const { error } = await supabase
       .from('profiles')
-      .update({ default_currency: currency })
-      .eq('id', user.id)
+      .upsert({ 
+        id: user.id,
+        default_currency: currency,
+        updated_at: new Date().toISOString()
+      })
 
     if (!error) {
       setSuccess(true)
@@ -68,7 +103,7 @@ export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
   }
 
   // Don't render theme buttons until mounted to avoid hydration mismatch
-  const currentTheme = mounted ? theme : 'system'
+  const currentTheme: string | undefined = mounted ? theme : 'system'
 
   return (
     <div className="space-y-6">

@@ -1,12 +1,14 @@
 /**
- * @fileoverview Danger zone with account deletion.
+ * @fileoverview "Danger Zone" section for critical account actions.
+ * Contains functionality for signing out and permanently deleting the user account.
+ * Implements safeguards like email confirmation for destructive actions.
  * 
  * @module components/settings/DangerZone
  */
 
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,17 +23,38 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 
+/**
+ * Props for DangerZone component.
+ */
 interface DangerZoneProps {
+  /** The email address of the currently authenticated user, used for deletion confirmation */
   userEmail: string
 }
 
-export function DangerZone({ userEmail }: DangerZoneProps) {
+/**
+ * Settings section for high-risk actions.
+ * Provides:
+ * 1. Sign out button.
+ * 2. Delete account flow (modal + email confirmation).
+ * 
+ * @component
+ * @param {DangerZoneProps} props - User email for confirmation check.
+ * @returns {React.ReactElement} The rendered danger zone section.
+ * 
+ * @example
+ * <DangerZone userEmail="user@example.com" />
+ */
+export function DangerZone({ userEmail }: DangerZoneProps): React.ReactElement {
   const router = useRouter()
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [confirmEmail, setConfirmEmail] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
+  /**
+   * Handles user sign out.
+   * Redirects to login page after clearing Supabase session.
+   */
   const handleSignOut = async () => {
     setIsSigningOut(true)
     const supabase = createClient()
@@ -40,6 +63,18 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
     router.refresh()
   }
 
+  /**
+   * Handles permanent account deletion.
+   * Requires strict email match confirmation.
+   * 
+   * Note: The Supabase Javascript Client cannot delete the auth user itself (requires Admin API).
+   * Instead, this function:
+   * 1. Manually deletes all related user data (expenses, budgets, categories, profile).
+   * 2. Signs the user out.
+   * 
+   * A simpler alternative is relying on database ON DELETE CASCADE policies if set up,
+   * but manual deletion ensures cleanup before losing access.
+   */
   const handleDeleteAccount = async () => {
     if (confirmEmail !== userEmail) {
       alert('Email does not match')
@@ -57,17 +92,19 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
         return
       }
 
-      // Delete all user data (cascade should handle this, but being explicit)
+      // Explicitly delete user resources to ensure clean state
+      // This is redundant if RLS policies have CASCADE, but safe.
       await Promise.all([
         supabase.from('expenses').delete().eq('user_id', user.id),
         supabase.from('budgets').delete().eq('user_id', user.id),
         supabase.from('categories').delete().eq('user_id', user.id),
       ])
 
-      // Delete profile
+      // Delete user profile record
       await supabase.from('profiles').delete().eq('id', user.id)
 
-      // Sign out (account deletion requires admin SDK, so we just clear data and sign out)
+      // Finalize by signing out
+      // Ideally, a server-side route should handle the actual Auth User deletion via Admin API
       await supabase.auth.signOut()
       
       router.push('/')
@@ -81,7 +118,7 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
 
   return (
     <div className="space-y-4">
-      {/* Sign Out */}
+      {/* Sign Out Section */}
       <div className="flex items-start justify-between">
         <div>
           <h4 className="font-medium">Sign Out</h4>
@@ -101,7 +138,7 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
         </Button>
       </div>
 
-      {/* Delete Account */}
+      {/* Delete Account Section */}
       <div className="flex items-start justify-between pt-4 border-t">
         <div>
           <h4 className="font-medium text-destructive">Delete Account</h4>
@@ -109,6 +146,8 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
             Permanently delete your account and all data
           </p>
         </div>
+        
+        {/* Confirmation Dialog */}
         <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <DialogTrigger asChild>
             <Button variant="destructive">
@@ -132,6 +171,7 @@ export function DangerZone({ userEmail }: DangerZoneProps) {
                 value={confirmEmail}
                 onChange={(e) => setConfirmEmail(e.target.value)}
                 placeholder="Enter your email"
+                aria-label="Confirm email"
               />
               <div className="flex gap-3">
                 <Button

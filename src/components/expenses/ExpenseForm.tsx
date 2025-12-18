@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Lock, Unlock } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -25,6 +25,7 @@ import type { ParsedReceipt } from '@/lib/receiptParser'
 
 /**
  * Zod schema for expense form validation.
+ * Ensures amount is positive and date is present.
  */
 const expenseSchema = z.object({
   amount: z.string().min(1, 'Amount is required').refine(
@@ -37,15 +38,18 @@ const expenseSchema = z.object({
   category_id: z.string().optional(),
 })
 
+/**
+ * Type inferred from the expense validation schema.
+ */
 type ExpenseFormData = z.infer<typeof expenseSchema>
 
 /**
  * Props for ExpenseForm component.
  */
 interface ExpenseFormProps {
-  /** Available categories for selection */
+  /** Available categories for available for selection. */
   categories: Category[]
-  /** Existing expense data for edit mode */
+  /** Existing expense data for edit mode. If undefined, creates a new expense. */
   expense?: {
     id: string
     amount: number
@@ -54,26 +58,32 @@ interface ExpenseFormProps {
     expense_date: string
     category_id: string | null
   }
-  /** Initial mode: 'view' shows locked form, 'edit' allows editing */
+  /** Initial mode: 'view' shows locked form (read-only), 'edit' allows editing immediately. */
   initialMode?: 'view' | 'edit'
 }
 
 /**
  * Expense entry form with receipt OCR scanning support.
+ * Handles creating new expenses and updating existing ones.
+ * Supports recurring expense creation for new entries.
  * 
  * @component
+ * @param {ExpenseFormProps} props - Component props.
+ * @returns {React.ReactElement} The rendered expense form.
+ * 
  * @example
  * <ExpenseForm categories={categories} />
+ * <ExpenseForm categories={categories} expense={existingExpense} initialMode="view" />
  */
-export function ExpenseForm({ categories, expense, initialMode = 'edit' }: ExpenseFormProps) {
+export function ExpenseForm({ categories, expense, initialMode = 'edit' }: ExpenseFormProps): React.ReactElement {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
-  const [showScanner, setShowScanner] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(initialMode === 'edit' || !expense)
+  const [showScanner, setShowScanner] = useState<boolean>(false)
+  const [isEditMode, setIsEditMode] = useState<boolean>(initialMode === 'edit' || !expense)
   
-  // Recurring state
-  const [isRecurring, setIsRecurring] = useState(false)
+  // Recurring state - only applicable for new expenses
+  const [isRecurring, setIsRecurring] = useState<boolean>(false)
 
   const {
     register,
@@ -91,11 +101,14 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
     },
   })
 
-  // Watch interval to make sure it's captured
+  // Watch interval to make sure it's captured in state for logic usage
   const [interval, setInterval] = useState<'weekly' | 'monthly' | 'yearly'>('monthly')
 
   /**
    * Handle scanned receipt data - auto-fill form fields.
+   * Maps parsed receipt fields to form inputs.
+   * 
+   * @param {ParsedReceipt} data - Data extracted from the receipt.
    */
   const handleReceiptScan = useCallback((data: ParsedReceipt) => {
     if (data.total) {
@@ -113,8 +126,14 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
 
   /**
    * Submit form data to Supabase.
+   * Handles both insert (new) and update (existing) operations.
+   * Also handles creating a separate recurring_expenses record if selected.
+   * 
+   * @async
+   * @param {ExpenseFormData} data - Validated form data.
+   * @returns {Promise<void>}
    */
-  const onSubmit = async (data: ExpenseFormData) => {
+  const onSubmit = async (data: ExpenseFormData): Promise<void> => {
     setIsLoading(true)
     setError(null)
 
@@ -138,17 +157,19 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
 
     let result
     if (expense) {
+      // Update existing expense
       result = await supabase
         .from('expenses')
         .update(expenseData)
         .eq('id', expense.id)
     } else {
-      // 1. Create the standard expense
+      // Create new expense
+      // 1. Create the standard expense record
       result = await supabase.from('expenses').insert(expenseData)
 
-      // 2. If recurring, also create recurring record
+      // 2. If recurring option is checked, also create recurring record
       if (!result.error && isRecurring) {
-        // Calculate next due date based on interval
+        // Calculate next due date based on selected interval
         const nextDate = new Date(data.expense_date)
         if (interval === 'weekly') {
           nextDate.setDate(nextDate.getDate() + 7)
@@ -161,12 +182,12 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
         const recurringData = {
           user_id: user.id,
           amount: Number(data.amount),
-          currency: 'USD', // Default
+          currency: 'USD', // Default currency
           category_id: data.category_id || null,
           merchant: data.merchant || null,
           description: data.description || null,
           interval: interval,
-          last_generated_date: data.expense_date, // The one we just created
+          last_generated_date: data.expense_date, // The date of the expense we just created
           next_due_date: nextDate.toISOString().split('T')[0],
           active: true
         }
@@ -177,7 +198,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
         
         if (recurringResult.error) {
           console.error('Failed to create recurring expense', recurringResult.error)
-          // We don't block the UI here, but we could show a toast
+          // We don't block the UI here as the main expense was created, but we log the error
         }
       }
     }
@@ -263,7 +284,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
               </div>
             )}
 
-            {/* Amount */}
+            {/* Amount Input */}
             <div className="space-y-2">
               <Label htmlFor="amount">Amount *</Label>
               <div className="relative">
@@ -283,7 +304,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
               )}
             </div>
 
-            {/* Category */}
+            {/* Category Selection */}
             <div className="space-y-2">
               <Label htmlFor="category_id">Category</Label>
               <select
@@ -301,7 +322,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
               </select>
             </div>
 
-            {/* Merchant */}
+            {/* Merchant Input */}
             <div className="space-y-2">
               <Label htmlFor="merchant">Merchant</Label>
               <div className="relative">
@@ -316,7 +337,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
               </div>
             </div>
 
-            {/* Date */}
+            {/* Date Input */}
             <div className="space-y-2">
               <Label htmlFor="expense_date">Date *</Label>
               <div className="relative">
@@ -334,7 +355,7 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
               )}
             </div>
 
-            {/* Description */}
+            {/* Description Input */}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <div className="relative">

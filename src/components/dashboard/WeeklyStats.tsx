@@ -5,23 +5,31 @@
  * @module components/dashboard/WeeklyStats
  */
 
+/**
+ * @fileoverview Weekly spending statistics component.
+ * Bar chart showing daily spending with week-over-week comparison and visual indicators.
+ * 
+ * @module components/dashboard/WeeklyStats
+ */
+
 'use client'
 
+import React from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 /**
- * Daily spending data point.
+ * Daily spending data point used for the chart.
  */
 interface DayData {
-  /** Day label (e.g., "Mon", "Tue") */
+  /** Day label abbreviation (e.g., "Mon", "Tue") */
   day: string
-  /** Full date string */
+  /** Full date string for tooltip context */
   date: string
-  /** Amount spent this day */
+  /** Amount spent on this day of the current week */
   amount: number
-  /** Amount spent same day last week */
+  /** Amount spent on the corresponding day of the previous week for comparison */
   lastWeek: number
 }
 
@@ -29,21 +37,25 @@ interface DayData {
  * Props for WeeklyStats component.
  */
 interface WeeklyStatsProps {
-  /** Daily spending data for the week */
+  /** Daily spending data for the week (entries for each day) */
   data: DayData[]
-  /** Total spending this week */
+  /** Total accumulated spending for the current week */
   thisWeekTotal: number
-  /** Total spending last week */
+  /** Total accumulated spending for the previous week */
   lastWeekTotal: number
 }
 
 /**
- * Custom tooltip for the bar chart.
+ * Custom tooltip component for the Recharts BarChart.
+ * Displays current spending and percentage change vs last week.
+ * 
+ * @param props - Tooltip props provided by Recharts
  */
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DayData }> }) {
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DayData; value?: number }> }): React.ReactElement | null {
   if (!active || !payload?.length) return null
   
   const data = payload[0].payload
+  // Calculate percentage change safely avoiding division by zero
   const change = data.lastWeek > 0 
     ? ((data.amount - data.lastWeek) / data.lastWeek) * 100 
     : 0
@@ -66,8 +78,12 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
 
 /**
  * Weekly spending bar chart with comparison to previous week.
+ * Visualizes daily spending and provides week-over-week trend analysis.
  * 
  * @component
+ * @param {WeeklyStatsProps} props - Component props containing weekly comparison data.
+ * @returns {React.ReactElement} A bar chart with trend indicators and legend.
+ * 
  * @example
  * <WeeklyStats 
  *   data={weeklyData} 
@@ -75,13 +91,19 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
  *   lastWeekTotal={520} 
  * />
  */
-export function WeeklyStats({ data, thisWeekTotal, lastWeekTotal }: WeeklyStatsProps) {
+export function WeeklyStats({ data, thisWeekTotal, lastWeekTotal }: WeeklyStatsProps): React.ReactElement {
+  // Calculate overall percentage change for the week
   const weekOverWeekChange = lastWeekTotal > 0
     ? ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100
     : 0
 
-  // Determine bar colors based on comparison
-  const getBarColor = (amount: number, lastWeek: number) => {
+  /**
+   * Determine bar color based on spending comparison.
+   * - Red: > 20% increase vs last week
+   * - Green: > 20% decrease vs last week
+   * - Primary: Within +/- 20% range
+   */
+  const getBarColor = (amount: number, lastWeek: number): string => {
     if (lastWeek === 0) return 'hsl(var(--primary))'
     if (amount > lastWeek * 1.2) return 'hsl(var(--destructive))'
     if (amount < lastWeek * 0.8) return 'hsl(142.1 76.2% 36.3%)' // emerald-600
@@ -97,6 +119,7 @@ export function WeeklyStats({ data, thisWeekTotal, lastWeekTotal }: WeeklyStatsP
           <div className="text-sm text-muted-foreground">This week</div>
         </div>
         
+        {/* Trend Indicator */}
         <div className="flex items-center gap-2">
           {weekOverWeekChange > 0 ? (
             <TrendingUp className="h-5 w-5 text-destructive" />
@@ -115,7 +138,7 @@ export function WeeklyStats({ data, thisWeekTotal, lastWeekTotal }: WeeklyStatsP
         </div>
       </div>
 
-      {/* Bar chart */}
+      {/* Bar chart area */}
       <div className="h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -147,7 +170,7 @@ export function WeeklyStats({ data, thisWeekTotal, lastWeekTotal }: WeeklyStatsP
         </ResponsiveContainer>
       </div>
 
-      {/* Legend */}
+      {/* Semantic Legend */}
       <div className="flex justify-center gap-6 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded bg-primary" />

@@ -34,7 +34,61 @@ interface SearchParams {
 }
 
 /**
+ * Parse advanced search query for operators.
+ * Extracts special operators and returns remaining plain text.
+ */
+function parseSearchQuery(query: string): {
+  plainText: string
+  merchant?: string
+  category?: string
+  amountMin?: number
+  amountMax?: number
+} {
+  const result: ReturnType<typeof parseSearchQuery> = { plainText: '' }
+  
+  // Extract merchant: operator
+  const merchantMatch = query.match(/merchant:(\S+)/i)
+  if (merchantMatch) {
+    result.merchant = merchantMatch[1]
+    query = query.replace(merchantMatch[0], '')
+  }
+  
+  // Extract category: operator
+  const categoryMatch = query.match(/category:(\S+)/i)
+  if (categoryMatch) {
+    result.category = categoryMatch[1]
+    query = query.replace(categoryMatch[0], '')
+  }
+  
+  // Extract amount:>N operator
+  const amountGtMatch = query.match(/amount:>(\d+(?:\.\d+)?)/i)
+  if (amountGtMatch) {
+    result.amountMin = parseFloat(amountGtMatch[1])
+    query = query.replace(amountGtMatch[0], '')
+  }
+  
+  // Extract amount:<N operator
+  const amountLtMatch = query.match(/amount:<(\d+(?:\.\d+)?)/i)
+  if (amountLtMatch) {
+    result.amountMax = parseFloat(amountLtMatch[1])
+    query = query.replace(amountLtMatch[0], '')
+  }
+  
+  // Extract amount:N-M range operator
+  const amountRangeMatch = query.match(/amount:(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)/i)
+  if (amountRangeMatch) {
+    result.amountMin = parseFloat(amountRangeMatch[1])
+    result.amountMax = parseFloat(amountRangeMatch[2])
+    query = query.replace(amountRangeMatch[0], '')
+  }
+  
+  result.plainText = query.trim()
+  return result
+}
+
+/**
  * Apply filters to expenses array.
+ * Supports advanced search syntax (merchant:, category:, amount:>, etc.)
  */
 function applyFilters(
   expenses: ExpenseWithCategory[],
@@ -42,14 +96,44 @@ function applyFilters(
 ): ExpenseWithCategory[] {
   let filtered = [...expenses]
 
-  // Text search
+  // Parse advanced search query
   if (params.q) {
-    const query = params.q.toLowerCase()
-    filtered = filtered.filter(e => 
-      e.merchant?.toLowerCase().includes(query) ||
-      e.description?.toLowerCase().includes(query) ||
-      e.category?.name?.toLowerCase().includes(query)
-    )
+    const parsed = parseSearchQuery(params.q)
+    
+    // Plain text search (merchant or description)
+    if (parsed.plainText) {
+      const query = parsed.plainText.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.merchant?.toLowerCase().includes(query) ||
+        e.description?.toLowerCase().includes(query)
+      )
+    }
+    
+    // Merchant operator
+    if (parsed.merchant) {
+      const merchantQuery = parsed.merchant.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.merchant?.toLowerCase().includes(merchantQuery)
+      )
+    }
+    
+    // Category operator (from search syntax)
+    if (parsed.category) {
+      const catQuery = parsed.category.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.category?.name?.toLowerCase().includes(catQuery)
+      )
+    }
+    
+    // Amount min
+    if (parsed.amountMin !== undefined) {
+      filtered = filtered.filter(e => Number(e.amount) >= parsed.amountMin!)
+    }
+    
+    // Amount max
+    if (parsed.amountMax !== undefined) {
+      filtered = filtered.filter(e => Number(e.amount) <= parsed.amountMax!)
+    }
   }
 
   // Date range
@@ -60,9 +144,10 @@ function applyFilters(
     filtered = filtered.filter(e => e.expense_date <= params.to!)
   }
 
-  // Category
+  // Category (from dropdown selection - comma-separated IDs)
   if (params.category) {
-    filtered = filtered.filter(e => e.category_id === params.category)
+    const categoryIds = params.category.split(',')
+    filtered = filtered.filter(e => e.category_id && categoryIds.includes(e.category_id))
   }
 
   // Sort

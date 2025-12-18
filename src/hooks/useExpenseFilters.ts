@@ -11,28 +11,32 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCallback, useMemo, useTransition } from 'react'
 
 /**
- * Filter state for expense queries.
+ * Filter state structure for expense queries.
+ * Defines all available filtering and sorting options.
  */
 export interface ExpenseFilters {
-  /** Text search query for merchant/description */
+  /** Text search query for merchant name or description. */
   search: string
-  /** Start date filter (ISO string) */
+  /** Start date filter in ISO format (YYYY-MM-DD). */
   startDate: string
-  /** End date filter (ISO string) */
+  /** End date filter in ISO format (YYYY-MM-DD). */
   endDate: string
-  /** Category ID filter */
+  /** Category ID to filter by. */
   categoryId: string
-  /** Minimum amount filter */
+  /** Minimum expense amount. */
   minAmount: string
-  /** Maximum amount filter */
+  /** Maximum expense amount. */
   maxAmount: string
-  /** Sort field */
+  /** Field to sort results by. */
   sortBy: 'date' | 'amount' | 'merchant'
-  /** Sort direction */
+  /** Sort direction: 'asc' for ascending, 'desc' for descending. */
   sortOrder: 'asc' | 'desc'
 }
 
-/** Default filter values */
+/** 
+ * Default filter values used when no URL params are present.
+ * Defaults to sorting by date descending.
+ */
 const defaultFilters: ExpenseFilters = {
   search: '',
   startDate: '',
@@ -46,10 +50,21 @@ const defaultFilters: ExpenseFilters = {
 
 /**
  * Hook for managing expense filter state via URL search params.
+ * Synchronizes filter state with the URL query string to allow sharing and bookmarking.
  * 
- * @returns Filter state and update functions
+ * @returns {Object} Object containing current filters, update functions, and status.
+ * @property {ExpenseFilters} filters - Current filter state derived from URL.
+ * @property {(key: keyof ExpenseFilters, value: any) => void} setFilter - Updates a single filter.
+ * @property {(updates: Partial<ExpenseFilters>) => void} setFilters - Updates multiple filters at once.
+ * @property {() => void} clearFilters - Resets all filters to defaults.
+ * @property {boolean} hasActiveFilters - True if any non-default filters are applied (excluding sort).
+ * @property {boolean} isPending - True if a navigation transition is in progress.
+ * 
  * @example
- * const { filters, setFilter, clearFilters, isFiltering } = useExpenseFilters()
+ * const { filters, setFilter, isPending } = useExpenseFilters()
+ * 
+ * // Update search
+ * setFilter('search', 'Target')
  */
 export function useExpenseFilters() {
   const searchParams = useSearchParams()
@@ -59,6 +74,7 @@ export function useExpenseFilters() {
 
   /**
    * Parse current filters from URL search params.
+   * Memoized to prevent unnecessary re-renders.
    */
   const filters = useMemo<ExpenseFilters>(() => ({
     search: searchParams.get('q') ?? defaultFilters.search,
@@ -73,8 +89,9 @@ export function useExpenseFilters() {
 
   /**
    * Check if any filters are active.
+   * excludes sorting parameters as they always have a value.
    */
-  const hasActiveFilters = useMemo(() => {
+  const hasActiveFilters = useMemo<boolean>(() => {
     return (
       filters.search !== '' ||
       filters.startDate !== '' ||
@@ -87,8 +104,10 @@ export function useExpenseFilters() {
 
   /**
    * Update a single filter value.
-   * @param key - Filter key to update
-   * @param value - New value
+   * Removes the parameter from URL if value matches default.
+   * 
+   * @param {K} key - Filter key to update.
+   * @param {ExpenseFilters[K]} value - New value for the filter.
    */
   const setFilter = useCallback(<K extends keyof ExpenseFilters>(
     key: K,
@@ -96,7 +115,7 @@ export function useExpenseFilters() {
   ) => {
     const params = new URLSearchParams(searchParams.toString())
     
-    // Map filter keys to URL param names
+    // Map internal filter keys to shorter URL param names for cleanliness
     const paramMap: Record<keyof ExpenseFilters, string> = {
       search: 'q',
       startDate: 'from',
@@ -123,7 +142,9 @@ export function useExpenseFilters() {
 
   /**
    * Update multiple filters at once.
-   * @param updates - Partial filter updates
+   * Useful for applying complex filter sets or resetting specific groups.
+   * 
+   * @param {Partial<ExpenseFilters>} updates - Object containing partial filter updates.
    */
   const setFilters = useCallback((updates: Partial<ExpenseFilters>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -156,7 +177,8 @@ export function useExpenseFilters() {
   }, [searchParams, router, pathname])
 
   /**
-   * Clear all filters.
+   * Clear all filters and reset to defaults.
+   * Removes all query parameters from the URL.
    */
   const clearFilters = useCallback(() => {
     startTransition(() => {
