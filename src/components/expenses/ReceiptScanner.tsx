@@ -154,7 +154,8 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
       setError(err instanceof Error ? err.message : 'Failed to process receipt')
       setStatus('error')
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // OCR_API_URL is a constant, safe to omit
 
   /**
    * Handle file selection.
@@ -258,7 +259,8 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
 
         {(status === 'loading' || status === 'processing') && (
           <div className="text-center space-y-4">
-            {preview && (
+                        {preview && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}
                 alt="Receipt preview"
@@ -280,7 +282,8 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
 
         {status === 'success' && result && (
           <div className="space-y-4">
-            {preview && (
+                        {preview && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}
                 alt="Receipt preview"
@@ -330,7 +333,8 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
 
         {status === 'error' && (
           <div className="text-center space-y-4">
-            {preview && (
+                        {preview && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}
                 alt="Receipt preview"

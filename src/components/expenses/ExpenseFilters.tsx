@@ -12,8 +12,7 @@ import { Search, X, Calendar, Filter } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { useExpenseFilters, type ExpenseFilters as FilterState } from '@/hooks/useExpenseFilters'
-import type { Category } from '@/types/database'
+import { useExpenseFilters } from '@/hooks/useExpenseFilters'
 
 /**
  * Minimal category data needed for filtering.
@@ -41,15 +40,10 @@ interface ExpenseFiltersProps {
  * <ExpenseFilters categories={categories} />
  */
 export function ExpenseFilters({ categories }: ExpenseFiltersProps) {
-  const { filters, setFilter, setFilters, clearFilters, hasActiveFilters, isPending } = useExpenseFilters()
+  const { filters, setFilter, clearFilters, hasActiveFilters, isPending } = useExpenseFilters()
   
-  // Local state for debounced search
-  const [searchValue, setSearchValue] = useState(filters.search)
-
-  // Sync local search with URL on mount
-  useEffect(() => {
-    setSearchValue(filters.search)
-  }, [filters.search])
+  // Local state for debounced search - initialize from filters
+  const [searchValue, setSearchValue] = useState(() => filters.search)
 
   // Debounce search input
   useEffect(() => {

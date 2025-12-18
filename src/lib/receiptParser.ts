@@ -132,7 +132,6 @@ const CURRENCY_MAP: Record<string, string> = {
  * // { merchant: "Costco", total: 97.18, ... }
  */
 export function parseReceipt(ocrText: string): ParsedReceipt {
-  const text = ocrText.toUpperCase()
   const lines = ocrText.split('\n').map(l => l.trim()).filter(Boolean)
   let confidence = 0
 

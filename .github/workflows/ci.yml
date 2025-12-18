@@ -1,14 +1,12 @@
 # GitHub Actions CI/CD Pipeline for Cents
-# - Lint, Type Check, Build for TypeScript
-# - Auto-generate docs (TypeScript + Python)
-# - Deploy docs to GitHub Pages
-# - Automated releases with changelogs
+# - Lint & Type Check: Every push to ANY branch
+# - Full Build, Docs, Releases: main/develop branches and PRs to main
 
 name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: ['**']  # Run on ALL branches
   pull_request:
     branches: [main]
   release:
