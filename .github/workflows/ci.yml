@@ -180,8 +180,12 @@ jobs:
         run: npx typedoc --out docs/typescript
 
       # Python documentation
-      - name: Install Python doc tools
-        run: pip install pdoc
+      - name: Install Python doc tools and dependencies
+        run: |
+          pip install pdoc
+          # Install minimal dependencies for pdoc to import modules
+          # Skip paddlepaddle/paddleocr (heavy ML libs) - they're lazily imported
+          pip install fastapi uvicorn pydantic pillow numpy python-multipart
 
       - name: Generate Python docs (OCR Service)
         run: |
