@@ -9,6 +9,19 @@
   "includeVersion": true,
   "readme": "none",
   "name": "Cents - API Documentation",
+  "blockTags": [
+    "@fileoverview",
+    "@component",
+    "@description",
+    "@example",
+    "@see",
+    "@since",
+    "@todo",
+    "@module",
+    "@param",
+    "@returns",
+    "@default"
+  ],
   "navigation": {
     "includeCategories": true,
     "includeGroups": true

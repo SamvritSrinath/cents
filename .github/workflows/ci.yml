@@ -175,12 +175,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      # TypeScript documentation
-      - name: Install TypeDoc
-        run: npm install -D typedoc typedoc-plugin-markdown
-
+      # TypeScript documentation (HTML for GitHub Pages)
       - name: Generate TypeScript docs
-        run: npx typedoc --out docs/typescript src --plugin typedoc-plugin-markdown --readme none --excludePrivate --excludeInternal
+        run: npx typedoc --out docs/typescript
 
       # Python documentation
       - name: Install Python doc tools
@@ -189,13 +186,13 @@ jobs:
       - name: Generate Python docs (OCR Service)
         run: |
           cd ocr-service
-          pdoc --html --output-dir ../docs/python main.py || echo "Python docs generation skipped"
+          pdoc -o ../docs/python main.py || echo "Python docs generation skipped"
         continue-on-error: true
 
       - name: Generate Python docs (HF Spaces)
         run: |
           cd hf-spaces
-          pdoc --html --output-dir ../docs/python-hf app.py || echo "HF Spaces docs generation skipped"
+          pdoc -o ../docs/python-hf app.py || echo "HF Spaces docs generation skipped"
         continue-on-error: true
 
       # Create docs index
@@ -220,18 +217,18 @@ jobs:
             
             <div class="section">
               <h2>📘 TypeScript (Next.js)</h2>
-              <p><a href="./typescript/">View TypeScript API Documentation →</a></p>
+              <p><a href="./typescript/index.html">View TypeScript API Documentation →</a></p>
             </div>
             
             <div class="section">
               <h2>🐍 Python (OCR Service)</h2>
-              <p><a href="./python/">View Python API Documentation →</a></p>
+              <p><a href="./python/main.html">View Python API Documentation →</a></p>
             </div>
             
             <div class="section">
               <h2>🔗 Links</h2>
               <ul>
-                <li><a href="https://github.com/SamvritSrinath/cents">GitHub Repository</a></li>
+                <li><a href="https://github.com/SamvritSrinath/expensely">GitHub Repository</a></li>
                 <li><a href="https://samvrit-srinath-cents.hf.space">OCR Service (HF Spaces)</a></li>
               </ul>
             </div>
