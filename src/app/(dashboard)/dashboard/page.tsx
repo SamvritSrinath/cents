@@ -1,9 +1,17 @@
+/**
+ * @fileoverview Main dashboard page with spending overview and charts.
+ * Displays stats, spending trend, category breakdown, and recent expenses.
+ * 
+ * @module app/(dashboard)/dashboard/page
+ */
+
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SpendingChart } from '@/components/dashboard/SpendingChart'
 import { BudgetProgress } from '@/components/dashboard/BudgetProgress'
 import { RecentExpenses } from '@/components/dashboard/RecentExpenses'
+import { CategoryDonut } from '@/components/dashboard/CategoryDonut'
 import { formatCurrency, getCurrentMonthRange, toISODateString } from '@/lib/utils'
 import { Plus, TrendingUp, TrendingDown, DollarSign, Receipt } from 'lucide-react'
 import Link from 'next/link'
@@ -46,7 +54,7 @@ export default async function DashboardPage() {
       .eq('user_id', user.id),
     supabase
       .from('expenses')
-      .select('amount')
+      .select('amount, category_id')
       .eq('user_id', user.id)
       .gte('expense_date', startDate)
       .lte('expense_date', endDate),
@@ -91,7 +99,7 @@ export default async function DashboardPage() {
             Track your spending and stay on budget
           </p>
         </div>
-        <Link href="/expenses/new">
+        <Link href="/expenses/new" prefetch>
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
             Add Expense
@@ -221,6 +229,31 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
+        {/* Category Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Spending by Category</CardTitle>
+            <CardDescription>This month&apos;s breakdown</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CategoryDonut 
+              data={(categoriesData || []).map(cat => {
+                const catExpenses = (thisMonthTotal || []).filter((e) => 
+                  e.category_id === cat.id
+                )
+                return {
+                  id: cat.id,
+                  name: cat.name,
+                  amount: catExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+                  color: cat.color,
+                  icon: cat.icon,
+                }
+              }).filter(c => c.amount > 0)}
+              total={currentMonthSpending}
+            />
+          </CardContent>
+        </Card>
+
         {/* Recent Expenses */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -228,7 +261,7 @@ export default async function DashboardPage() {
               <CardTitle>Recent Expenses</CardTitle>
               <CardDescription>Your latest transactions</CardDescription>
             </div>
-            <Link href="/expenses">
+            <Link href="/expenses" prefetch>
               <Button variant="ghost" size="sm">
                 View all
               </Button>
