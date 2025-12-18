@@ -1,13 +1,13 @@
 /**
- * @fileoverview Category card component for displaying a single category.
- * Shows icon, name, color, and monthly spending with edit/delete actions.
+ * @fileoverview Card component representing a single expense category.
+ * Displays category icon, name, color, monthly spending, and management actions (edit/delete).
  * 
  * @module components/categories/CategoryCard
  */
 
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,20 +17,38 @@ import { createClient } from '@/lib/supabase/client'
 import { CategoryFormDialog } from './CategoryFormDialog'
 import type { Category } from '@/types/database'
 
+/**
+ * Props passed to the CategoryCard.
+ * Extends the database Category type with aggregated monthly spending data.
+ */
 interface CategoryCardProps {
+  /** The category object joined with calculated monthly spending amount */
   category: Category & { monthlySpending: number }
 }
 
 /**
- * Card component for displaying a category with spending stats.
- * Includes edit and delete actions.
+ * Visual card for a category item.
+ * Features:
+ * - Icon and name display
+ * - Monthly spending summary
+ * - Hover actions for editing or deleting
+ * - Default status indicator
  * 
  * @component
+ * @param {CategoryCardProps} props - Category data.
+ * @returns {React.ReactElement} A card element suitable for a grid layout.
+ * 
+ * @example
+ * <CategoryCard category={{...catData, monthlySpending: 500}} />
  */
-export function CategoryCard({ category }: CategoryCardProps) {
+export function CategoryCard({ category }: CategoryCardProps): React.ReactElement {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
 
+  /**
+   * Handles deleting the category.
+   * Prompts user for confirmation before removing from database.
+   */
   const handleDelete = async () => {
     if (!confirm(`Delete "${category.name}"? This cannot be undone.`)) {
       return
@@ -39,6 +57,7 @@ export function CategoryCard({ category }: CategoryCardProps) {
     setIsDeleting(true)
     const supabase = createClient()
     
+    // Attempt deletion
     const { error } = await supabase
       .from('categories')
       .delete()
@@ -50,6 +69,7 @@ export function CategoryCard({ category }: CategoryCardProps) {
       return
     }
 
+    // Refresh data on success
     router.refresh()
   }
 
@@ -58,6 +78,7 @@ export function CategoryCard({ category }: CategoryCardProps) {
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
+            {/* Category Icon with tinted background */}
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
               style={{ backgroundColor: `${category.color}20` }}
@@ -72,17 +93,18 @@ export function CategoryCard({ category }: CategoryCardProps) {
             </div>
           </div>
           
-          {/* Color indicator */}
+          {/* Color indicator dot */}
           <div
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: category.color }}
+            aria-hidden="true"
           />
         </div>
 
-        {/* Actions - shown on hover */}
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Action Buttons - revealed on hover */}
+        <div className="absolute right-2 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <CategoryFormDialog mode="edit" category={category}>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit category">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           </CategoryFormDialog>
@@ -92,6 +114,7 @@ export function CategoryCard({ category }: CategoryCardProps) {
             className="h-8 w-8 text-destructive hover:text-destructive"
             onClick={handleDelete}
             disabled={isDeleting}
+            aria-label="Delete category"
           >
             {isDeleting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

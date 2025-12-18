@@ -1,5 +1,13 @@
+/**
+ * @fileoverview Visualizes spending trends over time using an Area Chart.
+ * Uses Recharts for rendering and supports daily or monthly granularity.
+ * 
+ * @module components/dashboard/SpendingChart
+ */
+
 'use client'
 
+import React from 'react'
 import {
   AreaChart,
   Area,
@@ -11,23 +19,46 @@ import {
 } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
 
+/**
+ * Props passed to the chart component.
+ */
 interface SpendingChartProps {
+  /** Array of spending data points */
   data: {
-    month: string
+    month: string // Can be 'YYYY-MM' or 'YYYY-MM-DD' depending on granularity
     total_amount: number
     expense_count: number
   }[]
+  /** Level of detail for axis labels */
   granularity?: 'daily' | 'monthly'
 }
 
-export function SpendingChart({ data, granularity = 'monthly' }: SpendingChartProps) {
-  // Format data for chart
+/**
+ * Renderable Area Chart component for spending history.
+ * Transforms raw data into chart-friendly format and renders with responsive container.
+ * 
+ * @component
+ * @param {SpendingChartProps} props - Chart data and settings.
+ * @returns {React.ReactElement} Responsive chart container.
+ */
+export function SpendingChart({ data, granularity = 'monthly' }: SpendingChartProps): React.ReactElement {
+  // Format data for Recharts
+  // 1. slice() to avoid mutating original props
+  // 2. reverse() because API returns newest first, but chart needs chronological (oldest -> newest)
+  // 3. map() to format dates and numbers for display
   const chartData = data
     .slice()
     .reverse()
     .map((item) => {
-      const [year, month, day] = item.month.split('-').map(Number)
+      // Parse ISO date string to Date object safely
+      // Handles both 'YYYY-MM' and 'YYYY-MM-DD'
+      const parts = item.month.split('-').map(Number)
+      const year = parts[0]
+      const month = parts[1]
+      const day = parts[2]
+      
       const date = new Date(year, month - 1, day || 1)
+      
       return {
         name: date.toLocaleDateString('en-US', { 
           month: 'short',

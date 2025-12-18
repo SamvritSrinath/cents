@@ -1,13 +1,15 @@
 /**
- * @fileoverview Receipt scanner component with camera/file upload and OCR.
- * Uses PaddleOCR via Python microservice, with Tesseract.js fallback.
+ * @fileoverview Receipt scanner component with dual-strategy OCR.
+ * Primary: Server-side PaddleOCR (fast, accurate) via Python microservice.
+ * Fallback: Client-side Tesseract.js (slower, offline-capable) if API fails.
+ * Handles image capture, preview, processing, and result parsing.
  * 
  * @module components/expenses/ReceiptScanner
  */
 
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { Camera, Upload, Loader2, Check, AlertCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,29 +20,32 @@ import { formatCurrency } from '@/lib/utils'
  * Props for ReceiptScanner component.
  */
 interface ReceiptScannerProps {
-  /** Callback when receipt is successfully parsed */
+  /** Callback fired when receipt is successfully parsed and confirmed by user */
   onScan: (data: ParsedReceipt) => void
-  /** Callback to close/cancel scanner */
+  /** Optional callback to close or cancel the scanner UI */
   onClose?: () => void
 }
 
 /**
- * OCR processing status.
+ * OCR processing status flow state.
  */
 type ScanStatus = 'idle' | 'loading' | 'processing' | 'success' | 'error'
 
 /**
- * Receipt scanner with image upload and OCR processing.
- * Using dynamic import for Tesseract.js to reduce initial bundle size.
+ * Receipt scanner with image upload and hybrid OCR processing.
+ * Uses dynamic import for Tesseract.js to minimize initial bundle size.
  * 
  * @component
+ * @param {ReceiptScannerProps} props - Callbacks for scan results.
+ * @returns {React.ReactElement} The scanner UI with upload/camera controls and live preview.
+ * 
  * @example
  * <ReceiptScanner 
  *   onScan={(data) => console.log('Parsed:', data)} 
  *   onClose={() => setShowScanner(false)}
  * />
  */
-export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
+export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps): React.ReactElement {
   const [status, setStatus] = useState<ScanStatus>('idle')
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -48,12 +53,14 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
   const [result, setResult] = useState<ParsedReceipt | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  /** OCR API endpoint */
+  /** OCR API endpoint, defaulting to local python service */
   const OCR_API_URL = process.env.NEXT_PUBLIC_OCR_API_URL || 'http://localhost:8000'
 
   /**
    * Process image with PaddleOCR via Python microservice.
    * Falls back to client-side Tesseract if the API is unavailable.
+   * 
+   * @param {string | File} imageData - The image source (file object or data URL).
    */
   const processImage = useCallback(async (imageData: string | File) => {
     setStatus('loading')
@@ -61,12 +68,12 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
     setError(null)
 
     try {
-      // Convert to File if it's a data URL
+      // 1. Prepare file object
       let file: File
       if (imageData instanceof File) {
         file = imageData
       } else {
-        // Convert data URL to File
+        // Convert data URL to File object for FormData upload
         const response = await fetch(imageData)
         const blob = await response.blob()
         file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' })
@@ -75,7 +82,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
       setStatus('processing')
       setProgress(20)
 
-      // Try PaddleOCR API first
+      // 2. Attempt Primary OCR Strategy (PaddleOCR API)
       try {
         const formData = new FormData()
         formData.append('file', file)
@@ -96,7 +103,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
         const ocrResult = await response.json()
         console.log('PaddleOCR Result:', ocrResult)
 
-        // Transform API response to ParsedReceipt format
+        // Transform simplified API response to robust ParsedReceipt format
         const parsed: ParsedReceipt = {
           merchant: ocrResult.merchant || null,
           total: ocrResult.total || null,
@@ -113,26 +120,28 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
         return
 
       } catch (apiError) {
+        // 3. Fallback Strategy (Tesseract.js)
         console.warn('PaddleOCR API unavailable, falling back to Tesseract:', apiError)
         
-        // Fall back to Tesseract.js if API is unavailable
         setProgress(30)
         
-        // Convert file back to data URL for Tesseract
+        // Convert file back to data URL for client-side processing
         const imageUrl = await new Promise<string>((resolve) => {
           const reader = new FileReader()
           reader.onload = (e) => resolve(e.target?.result as string)
           reader.readAsDataURL(file)
         })
 
-        // Dynamic import to reduce bundle size
+        // Dynamic import to avoid loading heavy OCR library unless needed
         const Tesseract = await import('tesseract.js')
         
         setProgress(40)
         
+        // Initialize Tesseract worker with english language
         const worker = await Tesseract.createWorker('eng', 1, {
           logger: (m) => {
             if (m.status === 'recognizing text') {
+              // Map 0-100 progress to our UI scale (40-95%)
               setProgress(40 + Math.round(m.progress * 55))
             }
           },
@@ -143,7 +152,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
 
         console.log('Tesseract Fallback Text:', text)
 
-        // Parse the OCR result
+        // Parse extracted text using local regex logic
         const parsed = parseReceipt(text)
         setResult(parsed)
         setStatus('success')
@@ -155,40 +164,41 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
       setStatus('error')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // OCR_API_URL is a constant, safe to omit
+  }, []) // OCR_API_URL is treated as constant
 
   /**
-   * Handle file selection.
+   * Handle file selection from input or camera capture.
+   * Validates file type and size before processing.
    */
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type
+    // Validate file type (images only)
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file')
       return
     }
 
-    // Validate file size (max 10MB)
+    // Validate file size (max 10MB to prevent browser crashes)
     if (file.size > 10 * 1024 * 1024) {
       setError('Image must be less than 10MB')
       return
     }
 
-    // Create preview
+    // Create local preview
     const reader = new FileReader()
     reader.onload = (e) => {
       setPreview(e.target?.result as string)
     }
     reader.readAsDataURL(file)
 
-    // Process with OCR
+    // Start OCR pipeline
     await processImage(file)
   }, [processImage])
 
   /**
-   * Confirm and use the parsed result.
+   * Confirm result and notify parent component.
    */
   const handleConfirm = useCallback(() => {
     if (result) {
@@ -198,7 +208,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
   }, [result, onScan, onClose])
 
   /**
-   * Reset scanner state.
+   * Reset scanner to initial state for new scan.
    */
   const handleReset = useCallback(() => {
     setStatus('idle')
@@ -214,7 +224,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
   return (
     <Card className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-colors">
       <CardContent className="p-6">
-        {/* Hidden file input */}
+        {/* Hidden file input controlled by custom buttons */}
         <input
           ref={fileInputRef}
           type="file"
@@ -222,8 +232,10 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
           capture="environment"
           onChange={handleFileSelect}
           className="hidden"
+          aria-hidden="true"
         />
 
+        {/* Initial State: Upload Buttons */}
         {status === 'idle' && (
           <div className="text-center space-y-4">
             <div className="flex justify-center gap-4">
@@ -241,6 +253,7 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
                 size="lg"
                 onClick={() => {
                   if (fileInputRef.current) {
+                    // Force rear camera on mobile devices
                     fileInputRef.current.capture = 'environment'
                     fileInputRef.current.click()
                   }
@@ -257,9 +270,10 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
           </div>
         )}
 
+        {/* Loading/Processing State */}
         {(status === 'loading' || status === 'processing') && (
           <div className="text-center space-y-4">
-                        {preview && (
+             {preview && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}
@@ -280,9 +294,10 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
           </div>
         )}
 
+        {/* Success State: Review Results */}
         {status === 'success' && result && (
           <div className="space-y-4">
-                        {preview && (
+            {preview && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}
@@ -331,9 +346,10 @@ export function ReceiptScanner({ onScan, onClose }: ReceiptScannerProps) {
           </div>
         )}
 
+        {/* Error State */}
         {status === 'error' && (
           <div className="text-center space-y-4">
-                        {preview && (
+            {preview && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={preview}

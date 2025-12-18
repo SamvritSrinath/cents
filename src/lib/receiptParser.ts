@@ -10,19 +10,19 @@
  * Parsed receipt data structure.
  */
 export interface ParsedReceipt {
-  /** Extracted merchant name */
+  /** Extracted merchant name (e.g., "Target", "Costco") or null if not found. */
   merchant: string | null
-  /** Extracted total amount */
+  /** Extracted total amount extracted from the receipt or null. */
   total: number | null
-  /** Extracted date (ISO string) */
+  /** Extracted date formatted as an ISO 8601 string (YYYY-MM-DD) or null. */
   date: string | null
-  /** Detected currency code */
+  /** Detected currency code (e.g., "USD", "EUR"). Defaults to "USD" if symbol found. */
   currency: string
-  /** Extracted line items */
+  /** List of extracted line items with names and prices. */
   items: Array<{ name: string; price: number }>
-  /** Raw OCR text */
+  /** Raw text content extracted via OCR. */
   rawText: string
-  /** Confidence score 0-1 */
+  /** Confidence score between 0 and 1 indicating parsing reliability. */
   confidence: number
 }
 
@@ -32,6 +32,9 @@ export interface ParsedReceipt {
  * Ordered by specificity - more unique patterns first to avoid false matches.
  * 
  * Priority: Multi-word names > Unique names > Short/common names
+ * 
+ * @constant
+ * @type {Array<{ pattern: RegExp; name: string; priority: number }>}
  */
 const KNOWN_MERCHANTS: Array<{ pattern: RegExp; name: string; priority: number }> = [
   // === HIGH PRIORITY: Multi-word or very unique names (least likely false positive) ===
@@ -99,9 +102,12 @@ const KNOWN_MERCHANTS: Array<{ pattern: RegExp; name: string; priority: number }
 /**
  * Find merchant from text using priority-ordered pattern matching.
  * Higher priority patterns are checked first.
+ * 
+ * @param {string} text - The text to search for merchant names.
+ * @returns {{ name: string; priority: number } | null} The found merchant name and its priority, or null if no match.
  */
 function findMerchant(text: string): { name: string; priority: number } | null {
-  // Sort by priority descending
+  // Sort by priority descending to ensure best matches found first
   const sortedMerchants = [...KNOWN_MERCHANTS].sort((a, b) => b.priority - a.priority)
   
   for (const { pattern, name, priority } of sortedMerchants) {
@@ -114,6 +120,9 @@ function findMerchant(text: string): { name: string; priority: number } | null {
 
 /**
  * Common currency symbols and their codes.
+ * 
+ * @constant
+ * @type {Record<string, string>}
  */
 const CURRENCY_MAP: Record<string, string> = {
   '$': 'USD',
@@ -125,11 +134,21 @@ const CURRENCY_MAP: Record<string, string> = {
 /**
  * Parse OCR text from a receipt into structured data.
  * 
- * @param ocrText - Raw text from OCR processing
- * @returns Parsed receipt data with extracted fields
+ * @param {string} ocrText - Raw text from OCR processing.
+ * @returns {ParsedReceipt} Parsed receipt data with extracted fields.
+ * 
  * @example
- * const receipt = parseReceipt("COSTCO WHOLESALE\nTOTAL $97.18")
- * // { merchant: "Costco", total: 97.18, ... }
+ * const receipt = parseReceipt("COSTCO WHOLESALE\nTOTAL $97.18\n12/25/2023")
+ * // Returns:
+ * // {
+ * //   merchant: "Costco",
+ * //   total: 97.18,
+ * //   date: "2023-12-25",
+ * //   currency: "USD",
+ * //   items: [],
+ * //   rawText: "...",
+ * //   confidence: 0.85
+ * // }
  */
 export function parseReceipt(ocrText: string): ParsedReceipt {
   const lines = ocrText.split('\n').map(l => l.trim()).filter(Boolean)
@@ -155,6 +174,7 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
       // Skip lines that are mostly numbers or too short
       if (/^[\d\s\-\/\.]+$/.test(line)) continue
       if (line.length < 3) continue
+      // Skip common receipt header words
       if (/^(total|subtotal|tax|cash|card|change|date|time)/i.test(line)) continue
       
       // Check if line is mostly uppercase letters (store name indicator)
@@ -175,18 +195,28 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
   // Multiple patterns for finding total, ordered by reliability
   const totalPatterns = [
     // "TOTAL $97.18" or "TOTAL: 97.18"
+    // \bTOTAL ensures word boundary
+    // [:\s]* matches optional colon and spaces
+    // \$? optional dollar sign
+    // ([\d,]+\.?\d{0,2}) matches amount (group 1)
     /\bTOTAL[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b/i,
+    
     // "GRAND TOTAL $97.18"
     /\bGRAND\s*TOTAL[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b/i,
+    
     // "AMOUNT DUE $97.18"
     /\bAMOUNT\s*(?:DUE)?[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b/i,
+    
     // "BALANCE $97.18"
     /\bBALANCE[:\s]*\$?\s*([\d,]+\.?\d{0,2})\b/i,
-    // Dollar amount at end of line after "TOTAL" somewhere
+    
+    // Dollar amount at end of line after "TOTAL" somewhere on the same line
     /TOTAL.*?(\d{1,4}\.\d{2})\s*$/im,
+    
     // Any two-decimal number >= 10 on a line containing "TOTAL"
     /.*TOTAL.*?(\d{2,4}\.\d{2})/i,
-    // Standalone large dollar amount (likely total if near end)
+    
+    // Standalone large dollar amount (likely total if near end of text)
     /\$\s*(\d{2,4}\.\d{2})\s*$/m,
   ]
   
@@ -194,7 +224,7 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
     const match = ocrText.match(pattern)
     if (match) {
       const value = parseFloat(match[1].replace(',', ''))
-      // Validate: totals are usually $1-$10000
+      // Validate: totals are usually $1-$10000 for personal expenses
       if (!isNaN(value) && value >= 1 && value <= 10000) {
         total = value
         confidence += 0.35
@@ -205,11 +235,12 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
 
   // If still no total, look for the largest dollar amount in the text
   if (!total) {
+    // Matches numbers with 2 decimals like 12.34
     const allAmounts = ocrText.match(/\d{1,4}\.\d{2}/g) || []
     const amounts = allAmounts
       .map(a => parseFloat(a))
       .filter(a => a >= 5 && a <= 10000)
-      .sort((a, b) => b - a)
+      .sort((a, b) => b - a) // Descending
     
     if (amounts.length > 0) {
       // The largest amount in a reasonable range is likely the total
@@ -224,10 +255,15 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
   let date: string | null = null
   const datePatterns = [
     // MM/DD/YYYY or MM-DD-YYYY or MM.DD.YYYY
+    // Group 1: month, Group 2: day, Group 3: year
     /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/,
+    
     // YYYY-MM-DD (ISO format)
+    // Group 1: year, Group 2: month, Group 3: day
     /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,
-    // Month DD, YYYY
+    
+    // Month DD, YYYY (e.g., "Jan 01, 2023")
+    // Group 1: Month name, Group 2: Day, Group 3: Year
     /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})/i,
   ]
 
@@ -280,11 +316,14 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
   // LINE ITEMS EXTRACTION
   // ========================================
   const items: Array<{ name: string; price: number }> = []
-  // Pattern: item description followed by price
+  // Pattern: item description (min 3 chars) followed by price
+  // ^(.{3,30}?): Non-greedy match for item name
+  // \s+: Spaces
+  // (\d{1,3}\.\d{2}): Price (e.g., 12.34)
   const itemPattern = /^(.{3,30}?)\s+(\d{1,3}\.\d{2})\s*$/
   
   for (const line of lines) {
-    // Skip if looks like subtotal/total/tax
+    // Skip if looks like subtotal/total/tax (headers/footers)
     if (/(total|subtotal|tax|change|cash|card|payment|balance)/i.test(line)) continue
     
     const match = line.match(itemPattern)
@@ -299,7 +338,7 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
     }
   }
 
-  // Cap confidence at 1
+  // Cap confidence found at 1
   confidence = Math.min(confidence, 1)
 
   return {
@@ -315,8 +354,16 @@ export function parseReceipt(ocrText: string): ParsedReceipt {
 
 /**
  * Validate parsed receipt data.
- * @param receipt - Parsed receipt to validate
- * @returns Array of validation errors (empty if valid)
+ * Checks for essential fields and confidence thresholds.
+ * 
+ * @param {ParsedReceipt} receipt - Parsed receipt to validate.
+ * @returns {string[]} Array of validation errors (empty if valid).
+ * 
+ * @example
+ * const errors = validateReceipt(receipt)
+ * if (errors.length > 0) {
+ *   console.error("Invalid receipt:", errors)
+ * }
  */
 export function validateReceipt(receipt: ParsedReceipt): string[] {
   const errors: string[] = []

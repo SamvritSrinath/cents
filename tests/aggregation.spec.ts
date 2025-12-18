@@ -12,6 +12,7 @@ import {
   calculateTotal,
   calculateCategoryTotals,
 } from './mocks/supabase-mock'
+import { parseSearchQuery } from '../src/lib/searchUtils'
 
 test.describe('Expense Aggregation Logic', () => {
   test('should calculate correct expense total', () => {
@@ -121,5 +122,69 @@ test.describe('Dashboard Data Integrity', () => {
     // Sum of all category totals should equal total
     const categorySum = Object.values(categoryTotals).reduce((a, b) => a + b, 0)
     expect(categorySum).toBeCloseTo(total, 2)
+  })
+})
+
+/**
+ * Tests for the advanced search query parser.
+ * Tests the actual parseSearchQuery function from searchUtils.
+ */
+test.describe('Search Query Parser', () => {
+  test('should extract merchant operator', () => {
+    const result = parseSearchQuery('merchant:Starbucks coffee')
+    expect(result.merchant).toBe('Starbucks')
+    expect(result.plainText).toBe('coffee')
+  })
+
+  test('should extract category operator', () => {
+    const result = parseSearchQuery('category:Food groceries')
+    expect(result.category).toBe('Food')
+    expect(result.plainText).toBe('groceries')
+  })
+
+  test('should extract amount greater than operator', () => {
+    const result = parseSearchQuery('amount:>50 expensive')
+    expect(result.amountMin).toBe(50)
+    expect(result.plainText).toBe('expensive')
+  })
+
+  test('should extract amount less than operator', () => {
+    const result = parseSearchQuery('amount:<100')
+    expect(result.amountMax).toBe(100)
+    expect(result.plainText).toBe('')
+  })
+
+  test('should extract amount range operator', () => {
+    const result = parseSearchQuery('amount:25-75')
+    expect(result.amountMin).toBe(25)
+    expect(result.amountMax).toBe(75)
+  })
+
+  test('should handle multiple operators', () => {
+    const result = parseSearchQuery('merchant:Target category:Shopping amount:>20')
+    expect(result.merchant).toBe('Target')
+    expect(result.category).toBe('Shopping')
+    expect(result.amountMin).toBe(20)
+    expect(result.plainText).toBe('')
+  })
+
+  test('should handle plain text only', () => {
+    const result = parseSearchQuery('coffee latte')
+    expect(result.merchant).toBeUndefined()
+    expect(result.category).toBeUndefined()
+    expect(result.amountMin).toBeUndefined()
+    expect(result.amountMax).toBeUndefined()
+    expect(result.plainText).toBe('coffee latte')
+  })
+
+  test('should handle decimal amounts', () => {
+    const result = parseSearchQuery('amount:>25.50')
+    expect(result.amountMin).toBe(25.50)
+  })
+
+  test('should be case insensitive', () => {
+    const result = parseSearchQuery('MERCHANT:Walmart AMOUNT:>100')
+    expect(result.merchant).toBe('Walmart')
+    expect(result.amountMin).toBe(100)
   })
 })

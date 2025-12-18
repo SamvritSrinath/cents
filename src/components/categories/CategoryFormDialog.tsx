@@ -1,13 +1,13 @@
 /**
- * @fileoverview Category form dialog for creating and editing categories.
- * Includes emoji picker and color palette.
+ * @fileoverview Dialog form for creating and updating expense categories.
+ * Features a custom emoji picker and color palette selector.
  * 
  * @module components/categories/CategoryFormDialog
  */
 
 'use client'
 
-import { useState, useCallback, ReactNode } from 'react'
+import React, { useState, useCallback, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -27,40 +27,68 @@ import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Category } from '@/types/database'
 
-// Common category emojis
+/**
+ * Predefined list of common emojis for quick selection.
+ */
 const EMOJI_OPTIONS = [
   '🛒', '🍔', '☕', '🚗', '🏠', '💊', '🎬', '✈️', '📱', '👕',
   '🎁', '📚', '🏋️', '💇', '🐕', '👶', '💰', '📦', '🔧', '⚡',
   '💼', '🎵', '🎮', '🌐', '🏥', '🎓', '🛍️', '🍕', '🍺', '🧾',
 ]
 
-// Color palette
+/**
+ * Predefined color palette for category theming.
+ * Includes colors from Tailwind CSS palette (red, orange, amber, green, etc.).
+ */
 const COLOR_OPTIONS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6',
   '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
   '#d946ef', '#ec4899', '#f43f5e', '#78716c', '#64748b', '#1f2937',
 ]
 
+/**
+ * Validation schema for category form data.
+ */
 const categorySchema = z.object({
+  /** Category name (max 50 chars) */
   name: z.string().min(1, 'Name is required').max(50, 'Name too long'),
+  /** Single emoji character or string representing the icon */
   icon: z.string().min(1, 'Please select an icon'),
+  /** Hex color code */
   color: z.string().min(1, 'Please select a color'),
 })
 
+/**
+ * Type alias for inferred category form structure.
+ */
 type CategoryFormData = z.infer<typeof categorySchema>
 
+/**
+ * Props for CategoryFormDialog.
+ */
 interface CategoryFormDialogProps {
+  /** Mode: 'create' for new category, 'edit' for existing */
   mode: 'create' | 'edit'
+  /** Existing category data (required for 'edit' mode) */
   category?: Category
+  /** Component that triggers opening the dialog */
   children: ReactNode
 }
 
 /**
- * Dialog for creating or editing categories.
+ * Dialog containing a form to manage category details.
+ * Includes interactive pickers for icons (emoji) and colors.
  * 
  * @component
+ * @param {CategoryFormDialogProps} props - Mode and initial data.
+ * @returns {React.ReactElement} Dialog wrapper with category form.
+ * 
+ * @example
+ * <CategoryFormDialog mode="create">
+ *   <Button>New Category</Button>
+ * </CategoryFormDialog>
  */
-export function CategoryFormDialog({ mode, category, children }: CategoryFormDialogProps) {
+export function CategoryFormDialog({ mode, category, children }: CategoryFormDialogProps): React.ReactElement {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -82,9 +110,16 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
     },
   })
 
+  // Watch form values for live preview
   const selectedIcon = watch('icon')
   const selectedColor = watch('color')
 
+  /**
+   * Handles form submission to Supabase.
+   * Creates or updates category record.
+   * 
+   * @param {CategoryFormData} data - Validated form inputs.
+   */
   const onSubmit = useCallback(async (data: CategoryFormData) => {
     setIsLoading(true)
     setError(null)
@@ -159,7 +194,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
             </div>
           )}
 
-          {/* Name */}
+          {/* Name Input */}
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -172,21 +207,22 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
             )}
           </div>
 
-          {/* Icon Picker */}
+          {/* Icon Picker Section */}
           <div className="space-y-2">
             <Label>Icon</Label>
-            {/* Custom emoji input */}
+            {/* Custom Manual Emoji Input */}
             <div className="flex items-center gap-2 mb-2">
               <Input
                 type="text"
                 placeholder="Type any emoji..."
                 value={selectedIcon}
                 onChange={(e) => {
-                  // Take only the last grapheme (emoji) entered
+                  // Complex logic to handle multi-byte emoji characters correctly
                   const value = e.target.value
                   if (value) {
-                    // Get the last character/emoji from the input
+                    // Use Intl.Segmenter to split graphemes correctly (handles compound emojis)
                     const segments = [...new Intl.Segmenter().segment(value)]
+                    // Take the last entered emoji/character
                     const lastEmoji = segments[segments.length - 1]?.segment || value.slice(-2)
                     setValue('icon', lastEmoji)
                   } else {
@@ -199,6 +235,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
                 Or choose from presets below
               </span>
             </div>
+            {/* Preset Emoji Grid */}
             <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-muted/50 max-h-36 overflow-y-auto">
               {EMOJI_OPTIONS.map((emoji) => (
                 <button
@@ -212,6 +249,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
                       ? 'bg-primary/20 ring-2 ring-primary' 
                       : 'bg-background hover:bg-accent'}
                   `}
+                  aria-label={`Select emoji ${emoji}`}
                 >
                   {emoji}
                 </button>
@@ -223,7 +261,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
             )}
           </div>
 
-          {/* Color Picker */}
+          {/* Color Picker Section */}
           <div className="space-y-2">
             <Label>Color</Label>
             <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-muted/50">
@@ -239,6 +277,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
                       : ''}
                   `}
                   style={{ backgroundColor: color }}
+                  aria-label={`Select color ${color}`}
                 />
               ))}
             </div>
@@ -248,7 +287,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
             )}
           </div>
 
-          {/* Preview */}
+          {/* Live Preview Section */}
           <div className="space-y-2">
             <Label>Preview</Label>
             <div className="flex items-center gap-3 p-3 border rounded-lg">
@@ -268,7 +307,7 @@ export function CategoryFormDialog({ mode, category, children }: CategoryFormDia
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Form Actions */}
           <div className="flex gap-3">
             <Button
               type="button"

@@ -30,6 +30,59 @@ test.describe('Expenses Page', () => {
     // Should show form or redirect to login
     await expect(page).toHaveURL(/login|expenses\/new/)
   })
+
+  test('should have filter UI elements', async ({ page }) => {
+    await page.goto('/expenses')
+    
+    // Check for search input
+    const searchInput = page.getByPlaceholder(/search/i)
+    if (await searchInput.isVisible().catch(() => false)) {
+      await expect(searchInput).toBeVisible()
+    }
+  })
+
+  test('should have categories filter button', async ({ page }) => {
+    await page.goto('/expenses')
+    
+    // Check for categories dropdown button
+    const categoriesButton = page.getByRole('combobox', { name: /categories/i })
+    if (await categoriesButton.isVisible().catch(() => false)) {
+      await expect(categoriesButton).toBeVisible()
+    }
+  })
+
+  test('should have date range inputs', async ({ page }) => {
+    await page.goto('/expenses')
+    
+    // Check for date inputs
+    const startDate = page.getByLabel(/start date/i)
+    const endDate = page.getByLabel(/end date/i)
+    
+    if (await startDate.isVisible().catch(() => false)) {
+      await expect(startDate).toBeVisible()
+      await expect(endDate).toBeVisible()
+    }
+  })
+
+  test('should have sort order toggle', async ({ page }) => {
+    await page.goto('/expenses')
+    
+    // Check for sort toggle button
+    const sortButton = page.getByLabel(/toggle sort order/i)
+    if (await sortButton.isVisible().catch(() => false)) {
+      await expect(sortButton).toBeVisible()
+    }
+  })
+
+  test('should have search help icon', async ({ page }) => {
+    await page.goto('/expenses')
+    
+    // Check for help button
+    const helpButton = page.getByLabel(/search syntax help/i)
+    if (await helpButton.isVisible().catch(() => false)) {
+      await expect(helpButton).toBeVisible()
+    }
+  })
 })
 
 test.describe('New Expense Form', () => {

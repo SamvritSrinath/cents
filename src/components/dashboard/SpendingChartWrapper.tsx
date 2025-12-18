@@ -7,30 +7,43 @@
 
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { SpendingChart } from './SpendingChart'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+/**
+ * Data structure for monthly spending aggregates.
+ */
 interface MonthlyData {
   month: string
   total_amount: number
   expense_count: number
 }
 
+/**
+ * Data structure for daily spending aggregates.
+ */
 interface DailyData {
   date: string
   total_amount: number
   expense_count: number
 }
 
+/**
+ * Props passed to the chart wrapper.
+ */
 interface SpendingChartWrapperProps {
+  /** Aggregated monthly spending data */
   data: MonthlyData[]
+  /** Aggregated daily spending data */
   dailyData: DailyData[]
 }
 
-// Time ranges with months to display
-// 1W shows 1 month of data (we don't have weekly granularity)
+/**
+ * Configuration for available time ranges.
+ * Defines the label, duration (days/months), and granularity type.
+ */
 const TIME_RANGES = [
   { label: '1W', days: 7, type: 'daily' },
   { label: '1M', days: 30, type: 'daily' },
@@ -39,13 +52,22 @@ const TIME_RANGES = [
   { label: '1Y', months: 12, type: 'monthly' },
 ] as const
 
-export function SpendingChartWrapper({ data, dailyData }: SpendingChartWrapperProps) {
-  const [selectedLabel, setSelectedLabel] = useState('6M')
+/**
+ * Wrapper component for the spending chart that adds time range controls.
+ * Handles data filtering logic based on the selected time range (e.g., last 7 days vs last 6 months).
+ * 
+ * @component
+ * @param {SpendingChartWrapperProps} props - Component props containing full datasets.
+ * @returns {React.ReactElement} The chart component with range selector.
+ */
+export function SpendingChartWrapper({ data, dailyData }: SpendingChartWrapperProps): React.ReactElement {
+  const [selectedLabel, setSelectedLabel] = useState<string>('6M')
 
-  // Get range config
+  // Get active range configuration
   const range = TIME_RANGES.find(r => r.label === selectedLabel)!
   
   // Filter data based on selected range type
+  // Maps daily data date strings to the 'month' field expected by the chart component
   let filteredData: (MonthlyData | { month: string; total_amount: number; expense_count: number })[] = []
   
   if (range.type === 'daily') {
@@ -62,7 +84,7 @@ export function SpendingChartWrapper({ data, dailyData }: SpendingChartWrapperPr
     filteredData = data.slice(0, range.months)
   }
 
-  // Handle empty data case
+  // Handle empty data case - show placeholder
   if (!filteredData || filteredData.length === 0) {
     return (
       <div className="space-y-4">
@@ -112,7 +134,7 @@ export function SpendingChartWrapper({ data, dailyData }: SpendingChartWrapperPr
         </div>
       </div>
 
-      {/* Chart - key forces remount on data change */}
+      {/* Chart - key forces remount on data change to ensure animation plays */}
       <div className="h-[300px] w-full" style={{ minHeight: '300px' }}>
         <SpendingChart 
           key={selectedLabel} 

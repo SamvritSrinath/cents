@@ -1,7 +1,16 @@
+/**
+ * @fileoverview Main application sidebar navigation component.
+ * Handles navigation between primary app sections, user profile display, and logout.
+ * Supports collapsible state for compact view.
+ * 
+ * @module components/dashboard/Sidebar
+ */
+
 'use client'
 
+import React, { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Receipt,
@@ -15,10 +24,12 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 
+/**
+ * Navigation items configuration.
+ * Defines the links displayed in the sidebar.
+ */
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
@@ -27,7 +38,11 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
+/**
+ * Props for Sidebar component.
+ */
 interface SidebarProps {
+  /** Authenticated user details to display in the footer */
   user: {
     email?: string
     display_name?: string | null
@@ -35,11 +50,23 @@ interface SidebarProps {
   }
 }
 
-export function Sidebar({ user }: SidebarProps) {
+/**
+ * Collapsible sidebar component containing navigation and user controls.
+ * Adapts layout based on collapsed state and current route.
+ * 
+ * @component
+ * @param {SidebarProps} props - Component props containing user info.
+ * @returns {React.ReactElement} The rendered sidebar navigation.
+ */
+export function Sidebar({ user }: SidebarProps): React.ReactElement {
   const pathname = usePathname()
   const router = useRouter()
   const [isCollapsed, setIsCollapsed] = useState(false)
 
+  /**
+   * Handles user sign out.
+   * Clears Supabase session and redirects to login page.
+   */
   const handleSignOut = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -47,6 +74,7 @@ export function Sidebar({ user }: SidebarProps) {
     router.refresh()
   }
 
+  // Generate initials for avatar fallback (e.g., "John Doe" -> "JD")
   const initials = user.display_name
     ? user.display_name.split(' ').map(n => n[0]).join('').toUpperCase()
     : user.email?.charAt(0).toUpperCase() || 'U'
@@ -58,7 +86,7 @@ export function Sidebar({ user }: SidebarProps) {
         isCollapsed ? 'w-[72px]' : 'w-64'
       )}
     >
-      {/* Logo */}
+      {/* Logo Section */}
       <div className="flex items-center h-16 px-4 border-b border-border">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
@@ -70,9 +98,10 @@ export function Sidebar({ user }: SidebarProps) {
         </Link>
       </div>
 
-      {/* Navigation */}
+      {/* Main Navigation Links */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
+          // Check if current route matches link or is a sub-route
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
@@ -93,7 +122,7 @@ export function Sidebar({ user }: SidebarProps) {
         })}
       </nav>
 
-      {/* Collapse Toggle */}
+      {/* Collapse Toggle Button */}
       <div className="px-3 py-2">
         <Button
           variant="ghost"
@@ -112,7 +141,7 @@ export function Sidebar({ user }: SidebarProps) {
         </Button>
       </div>
 
-      {/* User Section */}
+      {/* User Profile Footer */}
       <div className="border-t border-border p-3">
         <div
           className={cn(

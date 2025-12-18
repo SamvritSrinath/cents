@@ -18,6 +18,7 @@ import type { Expense, Category } from '@/types/database'
 import { ExpenseFilters } from '@/components/expenses/ExpenseFilters'
 import { ExportButton } from '@/components/expenses/ExportButton'
 import { DeleteExpenseButton } from '@/components/expenses/DeleteExpenseButton'
+import { parseSearchQuery } from '@/lib/searchUtils'
 
 type ExpenseWithCategory = Expense & { category?: Pick<Category, 'name' | 'icon' | 'color'> | null }
 
@@ -35,6 +36,7 @@ interface SearchParams {
 
 /**
  * Apply filters to expenses array.
+ * Supports advanced search syntax (merchant:, category:, amount:>, etc.)
  */
 function applyFilters(
   expenses: ExpenseWithCategory[],
@@ -42,14 +44,44 @@ function applyFilters(
 ): ExpenseWithCategory[] {
   let filtered = [...expenses]
 
-  // Text search
+  // Parse advanced search query
   if (params.q) {
-    const query = params.q.toLowerCase()
-    filtered = filtered.filter(e => 
-      e.merchant?.toLowerCase().includes(query) ||
-      e.description?.toLowerCase().includes(query) ||
-      e.category?.name?.toLowerCase().includes(query)
-    )
+    const parsed = parseSearchQuery(params.q)
+    
+    // Plain text search (merchant or description)
+    if (parsed.plainText) {
+      const query = parsed.plainText.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.merchant?.toLowerCase().includes(query) ||
+        e.description?.toLowerCase().includes(query)
+      )
+    }
+    
+    // Merchant operator
+    if (parsed.merchant) {
+      const merchantQuery = parsed.merchant.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.merchant?.toLowerCase().includes(merchantQuery)
+      )
+    }
+    
+    // Category operator (from search syntax)
+    if (parsed.category) {
+      const catQuery = parsed.category.toLowerCase()
+      filtered = filtered.filter(e => 
+        e.category?.name?.toLowerCase().includes(catQuery)
+      )
+    }
+    
+    // Amount min
+    if (parsed.amountMin !== undefined) {
+      filtered = filtered.filter(e => Number(e.amount) >= parsed.amountMin!)
+    }
+    
+    // Amount max
+    if (parsed.amountMax !== undefined) {
+      filtered = filtered.filter(e => Number(e.amount) <= parsed.amountMax!)
+    }
   }
 
   // Date range
@@ -60,9 +92,10 @@ function applyFilters(
     filtered = filtered.filter(e => e.expense_date <= params.to!)
   }
 
-  // Category
+  // Category (from dropdown selection - comma-separated IDs)
   if (params.category) {
-    filtered = filtered.filter(e => e.category_id === params.category)
+    const categoryIds = params.category.split(',')
+    filtered = filtered.filter(e => e.category_id && categoryIds.includes(e.category_id))
   }
 
   // Sort
