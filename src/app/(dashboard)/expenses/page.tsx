@@ -17,6 +17,7 @@ import Link from 'next/link'
 import type { Expense, Category } from '@/types/database'
 import { ExpenseFilters } from '@/components/expenses/ExpenseFilters'
 import { ExportButton } from '@/components/expenses/ExportButton'
+import { DeleteExpenseButton } from '@/components/expenses/DeleteExpenseButton'
 
 type ExpenseWithCategory = Expense & { category?: Pick<Category, 'name' | 'icon' | 'color'> | null }
 
@@ -212,7 +213,7 @@ export default async function ExpensesPage({
                       <Link
                         key={expense.id}
                         href={`/expenses/${expense.id}`}
-                        className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group"
                         prefetch={false}
                       >
                         <div className="flex items-center gap-3">
@@ -236,9 +237,14 @@ export default async function ExpensesPage({
                             </p>
                           </div>
                         </div>
-                        <p className="text-sm font-semibold">
-                          -{formatCurrency(expense.amount, expense.currency)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">
+                            -{formatCurrency(expense.amount, expense.currency)}
+                          </p>
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <DeleteExpenseButton expenseId={expense.id} />
+                          </div>
+                        </div>
                       </Link>
                     ))}
                   </CardContent>

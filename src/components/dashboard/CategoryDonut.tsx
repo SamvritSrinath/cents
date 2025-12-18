@@ -85,7 +85,7 @@ export function CategoryDonut({ data, total }: CategoryDonutProps) {
     : topCategories
 
   return (
-    <div className="h-[250px]">
+    <div className="h-[250px] min-h-[250px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

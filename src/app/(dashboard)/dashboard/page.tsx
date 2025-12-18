@@ -8,7 +8,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SpendingChart } from '@/components/dashboard/SpendingChart'
+import { SpendingChartWrapper } from '@/components/dashboard/SpendingChartWrapper'
 import { BudgetProgress } from '@/components/dashboard/BudgetProgress'
 import { RecentExpenses } from '@/components/dashboard/RecentExpenses'
 import { CategoryDonut } from '@/components/dashboard/CategoryDonut'
@@ -38,8 +38,9 @@ export default async function DashboardPage() {
     { data: thisMonthTotal },
     { data: lastMonthTotal },
     { data: expenseCount },
+    { data: dailySpending },
   ] = await Promise.all([
-    supabase.rpc('get_monthly_spending', { p_user_id: user.id, p_months: 6 }),
+    supabase.rpc('get_monthly_spending', { p_user_id: user.id, p_months: 12 }),
     supabase.rpc('get_budget_progress', { p_user_id: user.id }),
     supabase
       .from('expenses')
@@ -66,8 +67,9 @@ export default async function DashboardPage() {
       .lt('expense_date', startDate),
     supabase
       .from('expenses')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .eq('user_id', user.id),
+    supabase.rpc('get_daily_spending', { p_user_id: user.id, p_days: 60 }),
   ])
 
   // Create a map of category_id to category
@@ -198,16 +200,13 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Spending Trend</CardTitle>
-            <CardDescription>Your spending over the last 6 months</CardDescription>
+            <CardDescription>Your spending history</CardDescription>
           </CardHeader>
           <CardContent>
-            {monthlySpending && monthlySpending.length > 0 ? (
-              <SpendingChart data={monthlySpending} />
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                Add expenses to see your spending trend
-              </div>
-            )}
+            <SpendingChartWrapper 
+              data={monthlySpending || []} 
+              dailyData={dailySpending || []}
+            />
           </CardContent>
         </Card>
 

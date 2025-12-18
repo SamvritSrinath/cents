@@ -1,6 +1,6 @@
 /**
  * @fileoverview Client-side providers for the Cents application.
- * Sets up React Query for data caching and state management.
+ * Sets up React Query for data caching and ThemeProvider for theming.
  * 
  * @module app/providers
  */
@@ -8,6 +8,7 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ThemeProvider } from 'next-themes'
 import { useState, type ReactNode } from 'react'
 
 /**
@@ -50,7 +51,15 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem
+        disableTransitionOnChange
+      >
+        {children}
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }
+
