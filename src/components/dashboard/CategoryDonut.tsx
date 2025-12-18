@@ -1,12 +1,5 @@
 /**
  * @fileoverview Category spending donut chart component.
- * Visualizes spending distribution across categories.
- * 
- * @module components/dashboard/CategoryDonut
- */
-
-/**
- * @fileoverview Category spending donut chart component.
  * Visualizes spending distribution across categories with automatic aggregation of smaller categories.
  * 
  * @module components/dashboard/CategoryDonut
