@@ -1,5 +1,5 @@
 """
-Expensely OCR Service - PaddleOCR-based receipt scanning.
+cents OCR Service - PaddleOCR-based receipt scanning.
 
 FastAPI microservice that provides OCR capabilities for receipt parsing.
 Uses PaddleOCR for state-of-the-art accuracy on varied receipt formats and logos.
@@ -45,7 +45,7 @@ class OCRResult(BaseModel):
 # ============================================================================
 
 app = FastAPI(
-    title="Expensely OCR Service",
+    title="cents OCR Service",
     description="PaddleOCR-based receipt scanning for expense tracking",
     version="0.1.0"
 )
@@ -397,7 +397,7 @@ def parse_receipt_text(ocr_results: list, raw_text: str) -> OCRResult:
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "expensely-ocr", "engine": "paddleocr"}
+    return {"status": "ok", "service": "cents-ocr", "engine": "paddleocr"}
 
 
 @app.get("/health")

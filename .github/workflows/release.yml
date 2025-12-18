@@ -123,7 +123,7 @@ jobs:
             <div class="section">
               <h2>🔗 Links</h2>
               <ul>
-                <li><a href="https://github.com/SamvritSrinath/expensely">GitHub Repository</a></li>
+                <li><a href="https://github.com/SamvritSrinath/cents">GitHub Repository</a></li>
                 <li><a href="https://samvrit-srinath-cents.hf.space">OCR Service (HF Spaces)</a></li>
               </ul>
             </div>
@@ -174,7 +174,7 @@ jobs:
 
       - name: Get version from package.json
         id: version
-        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+        run: echo "version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
 
       - name: Check if tag exists
         id: tag_check

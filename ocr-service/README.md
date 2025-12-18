@@ -1,6 +1,6 @@
-# Expensely OCR Service
+# cents OCR Service
 
-PaddleOCR-based receipt scanning microservice for the Expensely expense tracker.
+PaddleOCR-based receipt scanning microservice for the cents expense tracker.
 
 ## Quick Start with Docker
 
@@ -9,8 +9,8 @@ PaddleOCR-based receipt scanning microservice for the Expensely expense tracker.
 docker compose up --build
 
 # Or build manually
-docker build -t expensely-ocr .
-docker run -p 8000:8000 expensely-ocr
+docker build -t cents-ocr .
+docker run -p 8000:8000 cents-ocr
 ```
 
 The server will be available at `http://localhost:8000`.

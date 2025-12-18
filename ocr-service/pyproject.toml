@@ -1,7 +1,7 @@
 [project]
-name = "expensely-ocr"
+name = "cents-ocr"
 version = "0.1.0"
-description = "PaddleOCR-based receipt scanning microservice for Expensely"
+description = "PaddleOCR-based receipt scanning microservice for cents"
 requires-python = ">=3.9,<3.12"
 dependencies = [
     "fastapi>=0.104.0",
