@@ -30,7 +30,6 @@ export function DataManagement() {
       const [
         { data: expenses },
         { data: categories },
-        { data: budgets },
       ] = await Promise.all([
         supabase
           .from('expenses')

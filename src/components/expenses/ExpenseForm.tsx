@@ -79,7 +79,6 @@ export function ExpenseForm({ categories, expense, initialMode = 'edit' }: Expen
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),

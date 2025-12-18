@@ -81,7 +81,7 @@ export async function updateSession(request: NextRequest) {
           error.code === 'session_not_found' ||
           error.message?.includes('Refresh Token')) {
         // Clear auth cookies to reset state
-        const cookiesToClear = ['sb-access-token', 'sb-refresh-token']
+        // Clear auth cookies to reset state
         request.cookies.getAll().forEach(cookie => {
           if (cookie.name.startsWith('sb-')) {
             supabaseResponse.cookies.delete(cookie.name)

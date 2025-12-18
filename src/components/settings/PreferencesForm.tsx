@@ -30,7 +30,7 @@ interface PreferencesFormProps {
 
 export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
   const router = useRouter()
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const [currency, setCurrency] = useState(defaultCurrency)
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -38,7 +38,7 @@ export function PreferencesForm({ defaultCurrency }: PreferencesFormProps) {
 
   // Avoid hydration mismatch
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/all, react-hooks/exhaustive-deps
+    // eslint-disable-next-line
     setMounted(true)
   }, [])
 
