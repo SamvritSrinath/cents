@@ -321,28 +321,108 @@ def extract_date(text: str) -> tuple[Optional[str], float]:
 
 
 def extract_line_items(lines: list[str]) -> list[LineItem]:
-    """Extract individual line items from receipt."""
-    items = []
-    
-    # Pattern: item name followed by price (with optional tax indicator)
-    item_pattern = r'^(.{3,35}?)\s+([\d,]+\.\d{2})\s*[A-Z]?$'
-    
-    for line in lines:
-        line = line.strip()
-        # Skip total/subtotal lines
-        if re.search(r'(total|subtotal|tax|change|cash|card|payment|balance|visa|amount)', line, re.IGNORECASE):
+    """
+    Extract line items from OCR lines.
+
+    PaddleOCR often emits product description and price on *separate* lines, e.g.:
+      212400595 GG SAUCE
+      2@$1.99 ea
+      212380316 BARILLA
+      $3.98
+    The legacy single-line regex misses these entirely.
+    """
+    items: list[LineItem] = []
+
+    def is_noise(l: str) -> bool:
+        s = l.strip()
+        return len(s) < 2 or s.upper() in ('NF', 'F', 'T', 'N')
+
+    def is_section_or_summary(l: str) -> bool:
+        return bool(
+            re.search(
+                r'^(SUBTOTAL|TOTAL|GRAND\s*TOTAL|TAX|NO\s*TAX|CHANGE|CASH|CARD\s*\d*|VISA|'
+                r'AMOUNT|BALANCE|GROCERY|PRODUCE|MEMBER|\*{2,})\s*$',
+                l.strip(),
+                re.I,
+            )
+        )
+
+    def looks_like_product_candidate(line: str) -> bool:
+        s = line.strip()
+        if len(s) < 4:
+            return False
+        if re.match(r'^\$?\s*[\d,]+\.\d{2}\s*$', s):
+            return False
+        if not re.search(r'[A-Za-z]{2,}', s):
+            return False
+        if re.match(r'^[\d\s\-\.\/\:]{8,}$', s) and not re.search(r'[A-Za-z]', s):
+            return False
+        if re.search(r'(SUBTOTAL|TOTAL|TAX|NO\s*TAX)\b', s, re.I):
+            return False
+        return True
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line or is_noise(line) or is_section_or_summary(line):
+            i += 1
             continue
-        
-        match = re.match(item_pattern, line)
-        if match:
-            name = match.group(1).strip()
+
+        # Single line: NAME    $12.34
+        m_combined = re.match(r'^(.{3,80}?)\s+([\d,]+\.\d{2})\s*[A-Z]?\s*$', line)
+        if m_combined and not re.match(r'^\$', m_combined.group(1).strip()):
+            name = m_combined.group(1).strip()
             try:
-                price = float(match.group(2).replace(',', ''))
-                if 0 < price < 1000 and len(name) >= 2:
-                    items.append(LineItem(name=name, price=price))
+                price = float(m_combined.group(2).replace(',', ''))
+                if 0 < price < 5000 and len(name) >= 2:
+                    items.append(LineItem(name=name[:120], price=price))
             except ValueError:
-                continue
-    
+                pass
+            i += 1
+            continue
+
+        if not looks_like_product_candidate(line):
+            i += 1
+            continue
+
+        name_candidate = line.strip()[:120]
+        j = i + 1
+        while j < len(lines) and is_noise(lines[j].strip()):
+            j += 1
+        if j >= len(lines):
+            i += 1
+            continue
+
+        next_line = lines[j].strip()
+
+        m_qty = re.match(
+            r'^(\d+)\s*@\s*\$?\s*([\d,]+\.\d{2})\b', next_line, re.I
+        )
+        if m_qty:
+            try:
+                qty = int(m_qty.group(1))
+                unit = float(m_qty.group(2).replace(',', ''))
+                total = round(qty * unit, 2)
+                if 0 < total < 5000:
+                    items.append(LineItem(name=name_candidate, price=total))
+                    i = j + 1
+                    continue
+            except ValueError:
+                pass
+
+        m_price = re.match(r'^\$?\s*([\d,]+\.\d{2})\s*$', next_line)
+        if m_price:
+            try:
+                price = float(m_price.group(1).replace(',', ''))
+                if 0.01 <= price < 5000:
+                    items.append(LineItem(name=name_candidate, price=price))
+                    i = j + 1
+                    continue
+            except ValueError:
+                pass
+
+        i += 1
+
     return items
 
 
@@ -374,6 +454,11 @@ def parse_receipt_text(ocr_results: list, raw_text: str) -> OCRResult:
     
     items = extract_line_items(lines)
     confidence += min(len(items) * 0.02, 0.15)  # Cap item bonus
+
+    # Some receipts put $0.00 on TOTAL (e.g. campus card) while SUBTOTAL is the real spend.
+    if (total is None or total == 0) and subtotal is not None and subtotal > 0:
+        total = subtotal
+        confidence = min(confidence + 0.05, 1.0)
     
     # Cap total confidence at 1.0
     confidence = min(confidence, 1.0)
@@ -388,6 +473,30 @@ def parse_receipt_text(ocr_results: list, raw_text: str) -> OCRResult:
         raw_text=raw_text,
         confidence=confidence,
     )
+
+
+def _paddle_lines_to_text_lines(result) -> list[str]:
+    """Turn PaddleOCR `ocr()` output into plain text lines; tolerate odd shapes."""
+    text_lines: list[str] = []
+    if not result:
+        return text_lines
+    if not isinstance(result, (list, tuple)) or len(result) == 0:
+        return text_lines
+    first = result[0]
+    if not first:
+        return text_lines
+    try:
+        for line in first:
+            if not line or len(line) < 2:
+                continue
+            cell = line[1]
+            if isinstance(cell, tuple) and len(cell) > 0 and cell[0]:
+                text_lines.append(str(cell[0]))
+            elif isinstance(cell, str) and cell.strip():
+                text_lines.append(cell)
+    except (TypeError, IndexError, ValueError) as e:
+        print(f"PaddleOCR result shape unexpected: {e!r}")
+    return text_lines
 
 
 # ============================================================================
@@ -417,15 +526,21 @@ async def process_receipt(file: UploadFile = File(...)):
     Returns:
         OCRResult with extracted merchant, total, date, items
     """
-    # Validate file type
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
     try:
-        # Read and convert image
+        # Read body first; validate with PIL (React Native often omits or mislabels Content-Type).
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
-        
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty upload")
+
+        try:
+            image = Image.open(io.BytesIO(contents))
+            image.load()
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="File must be a valid image (JPEG, PNG, etc.)",
+            )
+
         # Convert to RGB if necessary (handles PNG with alpha, etc.)
         if image.mode != 'RGB':
             image = image.convert('RGB')
@@ -437,15 +552,7 @@ async def process_receipt(file: UploadFile = File(...)):
         ocr = get_ocr_engine()
         result = ocr.ocr(img_array, cls=True)
         
-        # Extract text from results
-        # PaddleOCR 2.7.x returns: [[box, (text, confidence)], ...]
-        text_lines = []
-        if result and result[0]:
-            for line in result[0]:
-                if line and len(line) >= 2:
-                    text_content = line[1][0] if isinstance(line[1], tuple) else line[1]
-                    text_lines.append(text_content)
-        
+        text_lines = _paddle_lines_to_text_lines(result)
         raw_text = '\n'.join(text_lines)
         
         # Log for debugging
@@ -458,6 +565,8 @@ async def process_receipt(file: UploadFile = File(...)):
         
         return parsed
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"OCR Error: {e}")
         import traceback
