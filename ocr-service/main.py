@@ -337,18 +337,46 @@ def extract_line_items(lines: list[str]) -> list[LineItem]:
         s = l.strip()
         return len(s) < 2 or s.upper() in ('NF', 'F', 'T', 'N')
 
+    def is_payment_descriptor(s: str) -> bool:
+        """Card brand / payment footer lines (e.g. VISA CHARGE) are not product line items."""
+        t = s.strip()
+        if not t:
+            return False
+        if re.search(
+            r'\b('
+            r'VISA|MASTERCARD|MASTER\s*CARD|AMEX|AMERICAN\s*EXPRESS|DISCOVER|'
+            r'VISA\s+CHARGE|DEBIT|CREDIT|AUTHORIZATION|AUTH\.|APPROVED|'
+            r'PAYMENT\s+TYPE|INSERT\s*CHIP|TAP\s*TO\s*PAY|CONTACTLESS'
+            r')\b',
+            t,
+            re.I,
+        ):
+            return True
+        if re.search(r'\bCARD\s*\*?\s*\d', t, re.I):
+            return True
+        if re.search(r'\bCHARGE\b', t, re.I) and re.search(
+            r'\b(VISA|MC|AMEX|DISCOVER|DEBIT|CREDIT|CARD)\b', t, re.I
+        ):
+            return True
+        return False
+
     def is_section_or_summary(l: str) -> bool:
+        s = l.strip()
+        if is_payment_descriptor(s):
+            return True
         return bool(
             re.search(
                 r'^(SUBTOTAL|TOTAL|GRAND\s*TOTAL|TAX|NO\s*TAX|CHANGE|CASH|CARD\s*\d*|VISA|'
                 r'AMOUNT|BALANCE|GROCERY|PRODUCE|MEMBER|\*{2,})\s*$',
-                l.strip(),
+                s,
                 re.I,
             )
         )
 
     def looks_like_product_candidate(line: str) -> bool:
         s = line.strip()
+        if is_payment_descriptor(s):
+            return False
         if len(s) < 4:
             return False
         if re.match(r'^\$?\s*[\d,]+\.\d{2}\s*$', s):
@@ -372,6 +400,9 @@ def extract_line_items(lines: list[str]) -> list[LineItem]:
         m_combined = re.match(r'^(.{3,80}?)\s+([\d,]+\.\d{2})\s*[A-Z]?\s*$', line)
         if m_combined and not re.match(r'^\$', m_combined.group(1).strip()):
             name = m_combined.group(1).strip()
+            if is_payment_descriptor(name):
+                i += 1
+                continue
             try:
                 price = float(m_combined.group(2).replace(',', ''))
                 if 0 < price < 5000 and len(name) >= 2:

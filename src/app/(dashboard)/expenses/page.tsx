@@ -19,6 +19,7 @@ import { ExpenseFilters } from '@/components/expenses/ExpenseFilters'
 import { ExportButton } from '@/components/expenses/ExportButton'
 import { DeleteExpenseButton } from '@/components/expenses/DeleteExpenseButton'
 import { parseSearchQuery } from '@/lib/searchUtils'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 
 type ExpenseWithCategory = Expense & { category?: Pick<Category, 'name' | 'icon' | 'color'> | null }
 
@@ -143,7 +144,8 @@ export default async function ExpensesPage({
     supabase
       .from('categories')
       .select('id, name, icon, color')
-      .eq('user_id', user.id)
+      .or(categoriesForUserOrFilter(user.id))
+      .order('name'),
   ])
 
   // Create category map

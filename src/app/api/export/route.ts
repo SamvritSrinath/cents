@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 import { formatCurrency } from '@/lib/utils'
 
 /**
@@ -88,10 +89,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch data
-    const [{ data: expenses, error: expensesError }, { data: categoriesData }] = await Promise.all([
-      query,
-      supabase.from('categories').select('id, name, icon').eq('user_id', user.id)
-    ])
+    const [{ data: expenses, error: expensesError }, { data: categoriesData }] =
+      await Promise.all([
+        query,
+        supabase
+          .from('categories')
+          .select('id, name, icon')
+          .or(categoriesForUserOrFilter(user.id))
+          .order('name'),
+      ])
 
     if (expensesError) {
       return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 })

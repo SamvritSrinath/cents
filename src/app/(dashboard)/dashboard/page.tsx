@@ -16,6 +16,7 @@ import { formatCurrency, getCurrentMonthRange, toISODateString } from '@/lib/uti
 import { Plus, TrendingUp, TrendingDown, DollarSign, Receipt } from 'lucide-react'
 import Link from 'next/link'
 import type { Expense, Category } from '@/types/database'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 
 type ExpenseWithCategory = Expense & { category?: Pick<Category, 'name' | 'icon' | 'color'> | null }
 
@@ -52,7 +53,8 @@ export default async function DashboardPage() {
     supabase
       .from('categories')
       .select('id, name, icon, color')
-      .eq('user_id', user.id),
+      .or(categoriesForUserOrFilter(user.id))
+      .order('name'),
     supabase
       .from('expenses')
       .select('amount, category_id')

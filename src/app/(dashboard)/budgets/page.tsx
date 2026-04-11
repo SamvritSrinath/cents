@@ -15,6 +15,7 @@ import { formatCurrency } from '@/lib/utils'
 import { BudgetFormDialog } from '@/components/budgets/BudgetFormDialog'
 import { DeleteBudgetButton } from '@/components/budgets/DeleteBudgetButton'
 import { cn } from '@/lib/utils'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 
 export default async function BudgetsPage() {
   const supabase = await createClient()
@@ -30,7 +31,7 @@ export default async function BudgetsPage() {
     supabase
       .from('categories')
       .select('id, name, icon, color')
-      .eq('user_id', user.id)
+      .or(categoriesForUserOrFilter(user.id))
       .order('name'),
   ])
 

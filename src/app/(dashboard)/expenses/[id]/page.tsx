@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 import { redirect, notFound } from 'next/navigation'
 import { ExpenseForm } from '@/components/expenses/ExpenseForm'
 
@@ -34,11 +35,10 @@ export default async function ExpensePage({ params }: ExpensePageProps) {
     notFound()
   }
 
-  // Fetch categories for the dropdown
   const { data: categories } = await supabase
     .from('categories')
     .select('*')
-    .eq('user_id', user.id)
+    .or(categoriesForUserOrFilter(user.id))
     .order('name')
 
   return (

@@ -11,6 +11,7 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Download, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 
 /**
  * Component providing data management actions like export.
@@ -57,7 +58,7 @@ export function DataManagement(): React.ReactElement {
         supabase
           .from('categories')
           .select('*')
-          .eq('user_id', user.id),
+          .or(categoriesForUserOrFilter(user.id)),
       ])
 
       // Prepare CSV Headers

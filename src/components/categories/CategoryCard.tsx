@@ -24,6 +24,8 @@ import type { Category } from '@/types/database'
 interface CategoryCardProps {
   /** The category object joined with calculated monthly spending amount */
   category: Category & { monthlySpending: number }
+  /** Shared default categories cannot be edited or deleted */
+  readOnly?: boolean
 }
 
 /**
@@ -41,15 +43,18 @@ interface CategoryCardProps {
  * @example
  * <CategoryCard category={{...catData, monthlySpending: 500}} />
  */
-export function CategoryCard({ category }: CategoryCardProps): React.ReactElement {
+export function CategoryCard({
+  category,
+  readOnly = false,
+}: CategoryCardProps): React.ReactElement {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
+  const isLocked = readOnly || category.is_default
 
-  /**
-   * Handles deleting the category.
-   * Prompts user for confirmation before removing from database.
-   */
   const handleDelete = async () => {
+    if (isLocked) {
+      return
+    }
     if (!confirm(`Delete "${category.name}"? This cannot be undone.`)) {
       return
     }
@@ -101,28 +106,29 @@ export function CategoryCard({ category }: CategoryCardProps): React.ReactElemen
           />
         </div>
 
-        {/* Action Buttons - revealed on hover */}
-        <div className="absolute right-2 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <CategoryFormDialog mode="edit" category={category}>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit category">
-              <Pencil className="h-3.5 w-3.5" />
+        {!isLocked ? (
+          <div className="absolute right-2 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <CategoryFormDialog mode="edit" category={category}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit category">
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </CategoryFormDialog>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              aria-label="Delete category"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
             </Button>
-          </CategoryFormDialog>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            aria-label="Delete category"
-          >
-            {isDeleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        </div>
+          </div>
+        ) : null}
 
         {/* Default category badge */}
         {category.is_default && (

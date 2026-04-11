@@ -62,7 +62,8 @@ export interface Database {
       categories: {
         Row: {
           id: string
-          user_id: string
+          /** Null for shared default categories seeded in DB */
+          user_id: string | null
           name: string
           icon: string
           color: string
@@ -72,7 +73,8 @@ export interface Database {
         }
         Insert: {
           id?: string
-          user_id: string
+          /** Omit or null only for migration/admin; app inserts always set user id */
+          user_id?: string | null
           name: string
           icon?: string
           color?: string

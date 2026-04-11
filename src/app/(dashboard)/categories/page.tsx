@@ -13,6 +13,7 @@ import { Plus } from 'lucide-react'
 import { formatCurrency, getCurrentMonthRange, toISODateString } from '@/lib/utils'
 import { CategoryCard } from '@/components/categories/CategoryCard'
 import { CategoryFormDialog } from '@/components/categories/CategoryFormDialog'
+import { categoriesForUserOrFilter } from '@/lib/categories'
 
 export default async function CategoriesPage() {
   const supabase = await createClient()
@@ -26,12 +27,11 @@ export default async function CategoriesPage() {
   const startDate = toISODateString(start)
   const endDate = toISODateString(end)
 
-  // Fetch categories and spending in parallel
   const [{ data: categories }, { data: spending }] = await Promise.all([
     supabase
       .from('categories')
       .select('*')
-      .eq('user_id', user.id)
+      .or(categoriesForUserOrFilter(user.id))
       .order('name'),
     supabase.rpc('get_spending_by_category', {
       p_user_id: user.id,
@@ -51,8 +51,10 @@ export default async function CategoriesPage() {
     monthlySpending: spendingMap.get(cat.id) || 0,
   }))
 
-  // Calculate total spending
   const totalSpending = (spending || []).reduce((sum, s) => sum + (s.total_amount || 0), 0)
+
+  const defaultCategories = categoriesWithSpending.filter((c) => c.is_default)
+  const userCategories = categoriesWithSpending.filter((c) => !c.is_default)
 
   return (
     <div className="space-y-6">
@@ -82,7 +84,6 @@ export default async function CategoriesPage() {
         </CardHeader>
       </Card>
 
-      {/* Categories Grid */}
       {categoriesWithSpending.length === 0 ? (
         <Card>
           <CardContent className="py-12">
@@ -101,10 +102,30 @@ export default async function CategoriesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {categoriesWithSpending.map((category) => (
-            <CategoryCard key={category.id} category={category} />
-          ))}
+        <div className="space-y-8">
+          {defaultCategories.length > 0 ? (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">Default categories</h2>
+              <p className="text-sm text-muted-foreground">
+                Shared categories for everyone. Edit or delete your own categories below.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {defaultCategories.map((category) => (
+                  <CategoryCard key={category.id} category={category} readOnly />
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {userCategories.length > 0 ? (
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">Your categories</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {userCategories.map((category) => (
+                  <CategoryCard key={category.id} category={category} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
